@@ -1,4 +1,4 @@
-module main
+module github.com/SouthUral/exchangeTest
 
 go 1.21.2
 

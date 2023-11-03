@@ -21,9 +21,11 @@ type SubscriberChan chan SubscriberMess
 
 // Сообщение содержащее информацию о подписчике
 type SubscriberMess struct {
-	name   string
-	types  []string
-	evenCh EventChan
+	name       string
+	types      []string
+	publishers []publisher
+	allEvent   bool
+	evenCh     EventChan
 }
 
 // Структура содержащая каналы маршрутизаторов
@@ -34,7 +36,18 @@ type routersChans struct {
 }
 
 // Структура которую возвращает инициализатор маршрутизатора (любого типа)
-type eventRoutKIT struct {
+type eventRoutData struct {
+	eventCh  EventChan
+	subscrCh SubscriberChan
+	cancel   func()
+}
+
+type publisher struct {
+	name  string
+	types []string
+}
+
+type publisherRoutData struct {
 	eventCh  EventChan
 	subscrCh SubscriberChan
 	cancel   func()

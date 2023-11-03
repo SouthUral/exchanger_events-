@@ -23,26 +23,25 @@ func initTypeRouter() (EventChan, SubscriberChan, func()) {
 
 // Маршрутизатор сообщений по типу
 func typeRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}) {
-	types := make(map[string]eventRoutKIT)
+	types := make(map[string]eventRoutData)
 	defer log.Debugf("Работа маршрутизатора типов событий завершена")
 
 	for {
 		select {
 		case event := <-eventCh:
-			routKIT, ok := types[event.typeEvent]
-			if !ok {
-				routKIT := initTypeEventRouter(event.typeEvent)
-				types[event.typeEvent] = routKIT
-				routKIT.eventCh <- event
+			routData, ok := types[event.typeEvent]
+			if ok {
+				routData.eventCh <- event
+			} else {
+				routData := initTypeEventRouter(event.typeEvent)
+				types[event.typeEvent] = routData
+				routData.eventCh <- event
 			}
-			routKIT.eventCh <- event
-
 		case sub := <-subscrCh:
-			// TODO: нужно сделать отправку подписчика определенным типам (которые указаны в сообщении)
 			for _, eventType := range sub.types {
-				eventKIT, ok := types[eventType]
+				eventData, ok := types[eventType]
 				if ok {
-					eventKIT.subscrCh <- sub
+					eventData.subscrCh <- sub
 				} else {
 					log.Warningf("Подписчик %s не может подписаться на тип события %s, этот тип события не существует", sub.name, eventType)
 					go func(subMess SubscriberMess) {
@@ -65,10 +64,10 @@ func typeRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}) 
 }
 
 // Запускает в отдельной горутине typeEventRouter (маршрутизатор типа)
-func initTypeEventRouter(eventType string) eventRoutKIT {
+func initTypeEventRouter(eventType string) eventRoutData {
 	done := make(chan struct{})
 
-	routKIT := eventRoutKIT{
+	routData := eventRoutData{
 		eventCh:  make(EventChan, 100),
 		subscrCh: make(SubscriberChan, 100),
 		cancel: func() {
@@ -76,11 +75,11 @@ func initTypeEventRouter(eventType string) eventRoutKIT {
 		},
 	}
 
-	go typeEventRouter(routKIT.eventCh, routKIT.subscrCh, done, eventType)
+	go typeEventRouter(routData.eventCh, routData.subscrCh, done, eventType)
 
 	log.Debugf("typeEventRouter для типа %s запущен", eventType)
 
-	return routKIT
+	return routData
 }
 
 // Маршрутизатор конкретного типа события.

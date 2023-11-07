@@ -58,7 +58,9 @@ func typeRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}) 
 
 			}
 		case <-done:
-			return
+			for _, routData := range types {
+				routData.cancel()
+			}
 		}
 	}
 }

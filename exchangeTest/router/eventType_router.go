@@ -7,7 +7,7 @@ import (
 )
 
 // Функция для инициализации маршрутизатора событий по типам
-func initTypeRouter() (EventChan, SubscriberChan, func()) {
+func initTypeRouter() eventRoutData {
 	eventCh := make(EventChan, 100)
 	subscrCh := make(SubscriberChan, 100)
 	done := make(chan struct{})
@@ -18,17 +18,29 @@ func initTypeRouter() (EventChan, SubscriberChan, func()) {
 	go typeRouter(eventCh, subscrCh, done)
 	log.Debug("Запущен маршрутизатор типов событий")
 
-	return eventCh, subscrCh, cancel
+	return eventRoutData{
+		eventCh:  eventCh,
+		subscrCh: subscrCh,
+		cancel:   cancel,
+	}
 }
 
 // Маршрутизатор сообщений по типу
 func typeRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}) {
-	types := make(map[string]eventRoutData)
 	defer log.Debugf("Работа маршрутизатора типов событий завершена")
+
+	types := make(map[string]eventRoutData)
+
+	// добавление маршрутизатора на все события
+	allEventRouter := initTypeEventRouter("allEvent")
+	types["allEvent"] = allEventRouter
 
 	for {
 		select {
 		case event := <-eventCh:
+			// отправка события маршрутизатору всех типов событий
+			allEventRouter.eventCh <- event
+
 			routData, ok := types[event.typeEvent]
 			if ok {
 				routData.eventCh <- event
@@ -38,6 +50,11 @@ func typeRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}) 
 				routData.eventCh <- event
 			}
 		case sub := <-subscrCh:
+			// отправка подписчика маршрутизатору всех типов
+			if sub.allEvent {
+				allEventRouter.subscrCh <- sub
+			}
+
 			for _, eventType := range sub.types {
 				eventData, ok := types[eventType]
 				if ok {
@@ -97,10 +114,10 @@ func typeEventRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struc
 		select {
 		case event := <-eventCh:
 			// проверка типа события (ошибки быть не дожно, проверка на всякий случай)
-			if event.typeEvent != eventType {
-				log.Errorf("Ожидается тип события %s, получен %s", eventType, event.typeEvent)
-				continue
-			}
+			// if event.typeEvent != eventType {
+			// 	log.Errorf("Ожидается тип события %s, получен %s", eventType, event.typeEvent)
+			// 	continue
+			// }
 
 			// TODO: можно добавить отписку подписчика от данного типа событий
 			for subscr, ch := range subscribers {

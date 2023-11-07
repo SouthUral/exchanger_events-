@@ -7,7 +7,7 @@ import (
 )
 
 // Функция для инициализации маршрутизатора событий по отправителям
-func initPublishRouter() (EventChan, SubscriberChan, func()) {
+func initPublishRouter() eventRoutData {
 	eventCh := make(EventChan, 100)
 	subscrCh := make(SubscriberChan, 100)
 	done := make(chan struct{})
@@ -18,14 +18,18 @@ func initPublishRouter() (EventChan, SubscriberChan, func()) {
 	go publishRouter(eventCh, subscrCh, done)
 	log.Debug("Запущен маршрутизатор событий по отправителю")
 
-	return eventCh, subscrCh, cancel
+	return eventRoutData{
+		eventCh:  eventCh,
+		subscrCh: subscrCh,
+		cancel:   cancel,
+	}
 }
 
 // Маршрутизатор событий по отправителю
 func publishRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}) {
 	defer log.Debugf("Работа маршрутизатора типов событий завершена")
 
-	publishers := make(map[string]publisherRoutData)
+	publishers := make(map[string]eventRoutData)
 
 	for {
 		select {
@@ -42,7 +46,14 @@ func publishRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{
 			for _, pub := range sub.publishers {
 				publisherData, ok := publishers[pub.name]
 				if ok {
-					publisherData.subscrCh <- sub
+					// в маршрутизатор отправителя попадет информация только по текущему отправителю
+					publisherData.subscrCh <- SubscriberMess{
+						name:       sub.name,
+						types:      sub.types,
+						publishers: []publisher{pub},
+						allEvent:   sub.allEvent,
+						evenCh:     sub.evenCh,
+					}
 				} else {
 					// сообщение будет отсылаться до тех пор, пока не появится нужный отправитель
 					log.Warningf("Подписчик %s не может подписаться на отправителя %s, этот отправитель не существует", sub.name, pub.name)
@@ -69,10 +80,10 @@ func publishRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{
 	}
 }
 
-func initPublisherEventRouter(namePublisher string) publisherRoutData {
+func initPublisherEventRouter(namePublisher string) eventRoutData {
 	done := make(chan struct{})
 
-	publisherData := publisherRoutData{
+	publisherData := eventRoutData{
 		eventCh:  make(EventChan, 100),
 		subscrCh: make(SubscriberChan, 100),
 		cancel: func() {
@@ -87,16 +98,22 @@ func initPublisherEventRouter(namePublisher string) publisherRoutData {
 }
 
 func publisherEventRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}, namePublisher string) {
-	eventTypeCh, subscrTypeCh, typeClose := initTypeRouter()
+	defer log.Debugf("работа маршрутизатора событий по отправителю %s завершена", namePublisher)
+
+	typeRoutData := initTypeRouter()
 
 	for {
 		select {
 		case event := <-eventCh:
-			eventTypeCh <- event
+			typeRoutData.eventCh <- event
 		case sub := <-subscrCh:
-			subscrTypeCh <- sub
+			// если publisher.types ничего не содержит, тогда получатель подписывается на все типы событий
+			if len(sub.publishers[0].types) == 0 {
+				sub.allEvent = true
+			}
+			typeRoutData.subscrCh <- sub
 		case <-done:
-			typeClose()
+			typeRoutData.cancel()
 			return
 		}
 	}

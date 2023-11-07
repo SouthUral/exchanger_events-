@@ -17,55 +17,72 @@ import (
 // TODO: Маршрутизатор подписчиков (принимает входящие каналы подписчиков от маршрутизаторов)
 
 // Функция для запуска маршрутизатора
-func InitRouter() (EventChan, SubscriberChan) {
-	var routersCh routersChans
-	eventCh, _ := initEventRouter(routersCh)
-	SubscrCh := make(SubscriberChan, 100)
+func InitRouter() (EventChan, SubscriberChan, func()) {
+	// TODO: нужно понять какой буфер делать у каналов
 
-	return eventCh, SubscrCh
-}
+	typeRoutData := initTypeRouter()
+	publishRoutData := initPublishRouter()
 
-// Инициализация всех маршрутизаторов (TypeRouter, PublishRouter, EventRouter)
-func initRouters() {
+	eventCh, eventRoutCancel := initEventRouter(typeRoutData.eventCh, publishRoutData.eventCh)
+	subCh, subRoutCancel := initSubscribeRouter(typeRoutData.subscrCh, publishRoutData.subscrCh)
 
-}
-
-// Функция для инициализации маршрутизатора всех событий
-func initAllEventRouter() (EventChan, SubscriberChan, func()) {
-	eventCh := make(EventChan, 100)
-	subscrCh := make(SubscriberChan, 100)
-	done := make(chan struct{})
 	cancel := func() {
-		close(done)
+		defer log.Debug("все маршрутизаторы выключены")
+		typeRoutData.cancel()
+		publishRoutData.cancel()
+		eventRoutCancel()
+		subRoutCancel()
 	}
 
-	return eventCh, subscrCh, cancel
+	return eventCh, subCh, cancel
 }
 
-// Функция инициализации маршрутизатора событий
-func initEventRouter(routersCh routersChans) (EventChan, func()) {
+// Инициализатор маршрутизатора событий
+func initEventRouter(typeEventRoutCh, publishEventRoutCh EventChan) (EventChan, func()) {
 	eventCh := make(EventChan, 100)
 	done := make(chan struct{})
 	cancel := func() {
 		close(done)
 	}
-	go eventRouter(routersCh, eventCh, done)
-	log.Debug("eventRouter запущен")
+
+	go func() {
+		defer log.Debug("Работа маршрутизатора событий завершена")
+		for {
+			select {
+			case event := <-eventCh:
+				typeEventRoutCh <- event
+				publishEventRoutCh <- event
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	log.Debug("маршрутизатор событий запущен")
 	return eventCh, cancel
 }
 
-// Функция маршрутизации событий
-func eventRouter(routersCh routersChans, eventCh EventChan, done chan struct{}) {
-	defer log.Debug("Работа маршрутизатора событий завершена")
-
-	for {
-		select {
-		case event := <-eventCh:
-			routersCh.typeCh <- event
-			routersCh.publishCh <- event
-			routersCh.allCh <- event
-		case <-done:
-			return
-		}
+// Инициализатор маршрутизатора сообщений получателей
+func initSubscribeRouter(typeSubscRoutCh, publishSubscRoutCh SubscriberChan) (SubscriberChan, func()) {
+	subCh := make(SubscriberChan, 100)
+	done := make(chan struct{})
+	cancel := func() {
+		close(done)
 	}
+
+	go func() {
+		defer log.Debug("работа маршутизатора сообщений получателей завершена")
+		for {
+			select {
+			case subMess := <-subCh:
+				typeSubscRoutCh <- subMess
+				publishSubscRoutCh <- subMess
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	log.Debug("маршрутизатор сообщений получателей запущен")
+	return subCh, cancel
 }

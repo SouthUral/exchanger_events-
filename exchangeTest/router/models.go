@@ -9,11 +9,11 @@ type EventChan chan Event
 
 // Событие, которое отправляет publisher
 type Event struct {
-	id          int
-	publisher   string
-	typeEvent   string
-	timePublish time.Time
-	message     string
+	Id          int
+	Publisher   string
+	TypeEvent   string
+	TimePublish time.Time
+	Message     string
 }
 
 // Канал для отправки подписчиков

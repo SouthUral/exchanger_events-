@@ -41,12 +41,12 @@ func typeRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}) 
 			// отправка события маршрутизатору всех типов событий
 			allEventRouter.eventCh <- event
 
-			routData, ok := types[event.typeEvent]
+			routData, ok := types[event.TypeEvent]
 			if ok {
 				routData.eventCh <- event
 			} else {
-				routData := initTypeEventRouter(event.typeEvent)
-				types[event.typeEvent] = routData
+				routData := initTypeEventRouter(event.TypeEvent)
+				types[event.TypeEvent] = routData
 				routData.eventCh <- event
 			}
 		case sub := <-subscrCh:
@@ -122,7 +122,7 @@ func typeEventRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struc
 			// TODO: можно добавить отписку подписчика от данного типа событий
 			for subscr, ch := range subscribers {
 				ch <- event
-				log.Debugf("Событие типа %s отправлено подписчику %s", event.typeEvent, subscr)
+				log.Debugf("Событие типа %s отправлено подписчику %s", event.TypeEvent, subscr)
 			}
 		case sub := <-subscrCh:
 			_, ok := subscribers[sub.name]

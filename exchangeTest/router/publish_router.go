@@ -34,12 +34,12 @@ func publishRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{
 	for {
 		select {
 		case event := <-eventCh:
-			publisherData, ok := publishers[event.publisher]
+			publisherData, ok := publishers[event.Publisher]
 			if ok {
 				publisherData.eventCh <- event
 			} else {
-				publisherData := initPublisherEventRouter(event.publisher)
-				publishers[event.publisher] = publisherData
+				publisherData := initPublisherEventRouter(event.Publisher)
+				publishers[event.Publisher] = publisherData
 				publisherData.eventCh <- event
 			}
 		case sub := <-subscrCh:

@@ -8,7 +8,7 @@ import (
 )
 
 // Функция звгрузки конфига
-func LoadConf(path string) (Config, error) {
+func LoadConfRabbit(path string) (Config, error) {
 	var conf Config
 
 	data, err := os.ReadFile(path)

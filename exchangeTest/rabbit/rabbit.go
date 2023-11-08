@@ -3,13 +3,43 @@ package rabbit
 import (
 	"context"
 
-	amqp "github.com/rabbitmq/amqp091-go"
+	router "github.com/SouthUral/exchangeTest/router"
 
+	amqp "github.com/rabbitmq/amqp091-go"
 	log "github.com/sirupsen/logrus"
 )
 
 // TODO: Работа консюмера (подписка на очередь)
 // TODO: Работа паблишера (отправка сообщения в очередь)
+
+func Publisher(URL string, exchangeName string, namePub string, eventChan router.EventChan) {
+
+	go func() {
+		connPub, err := createConnRabbit(URL)
+
+		if err != nil {
+			log.Errorf("Отправитель Rabbit %s прекратил свою работу, ошибка коннекта", namePub)
+			return
+		}
+
+		chanPub, err := createChannRabbit(connPub)
+		if err != nil {
+			log.Errorf("Отправитель Rabbit %s прекратил свою работу, ошибка создания канала", namePub)
+			return
+		}
+
+		for {
+			select {
+			case event := <-eventChan:
+				// TODO: какой routing_key нужно передать в Rabbit, есть два основных параметра: typeEvent, Publisher
+				// из них надо собрать routing_key
+				sendingMess(chanPub, context.Background(), exchangeName)
+			}
+		}
+		sendingMess()
+	}()
+
+}
 
 // Функция создания подключения к RabbitMQ
 func createConnRabbit(URL string) (*amqp.Connection, error) {

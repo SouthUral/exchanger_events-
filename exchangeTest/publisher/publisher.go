@@ -25,50 +25,79 @@ import (
 // eventCh - канал для отправки событий во внутренний маршрутизатор;
 // confPublishers - структура с кофигурациями отправителей;
 // rmqURL - URL для подключения к RabbitMQ
-func StartPublishers(eventCh router.EventChan, confPublishers []conf.Publisher, eventChan router.EventChan) {
-	for _, pubslishConf := range confPublishers {
-		publisher(pubslishConf, eventChan)
+func StartPublishers(eventCh router.EventChan, confPublishers []conf.Publisher, eventChan router.EventChan) func() {
+	publishersStorage := make(map[string]func())
+
+	closeAllPublishers := func() {
+		for _, item := range publishersStorage {
+			item()
+		}
 	}
+
+	for _, pubslishConf := range confPublishers {
+		publishersStorage[pubslishConf.Name] = publisher(pubslishConf, eventChan)
+	}
+
+	return closeAllPublishers
 }
 
-func initPublisher(confPublisher conf.Publisher, eventCh router.EventChan) func() {
+// генерирует и отправляет события во внутренний маршрутизатор и в exchange Rabbit
+func publisher(confPublisher conf.Publisher, eventCh router.EventChan) func() {
+	// TODO: функция генерации события (горутина, отправляет событие в Rabbit горутину и в маршрутизатор)
+	// TODO: отправка события в внутренний маршрутизатор
 	done := make(chan struct{})
 	cancel := func() {
 		close(done)
 	}
-	go func() {
-		for _, item := range confPublisher.TypeMess {
+	selfEventsCh := make(router.EventChan, 100)
 
+	go func() {
+		defer log.Debugf("Отправитель %s прекратил работу", confPublisher.Name)
+		genEventStorage := make(map[string]func())
+		for _, typeEvent := range confPublisher.TypeMess {
+			genEventStorage[typeEvent] = genEvent(typeEvent, confPublisher.Name, selfEventsCh)
+		}
+
+		for {
+			select {
+			case event := <-selfEventsCh:
+				eventCh <- event
+			case <-done:
+				for _, item := range genEventStorage {
+					item()
+				}
+				return
+			}
 		}
 	}()
 
 	return cancel
 }
 
-// генерирует и отправляет события во внутренний маршрутизатор и в exchange Rabbit
-func publisher(confPublisher conf.Publisher, eventCh router.EventChan) func() {
-	closeGenEvent := genEvent(confPublisher)
-	// TODO: функция генерации события (горутина, отправляет событие в Rabbit горутину и в маршрутизатор)
-	// TODO: отправка события в внутренний маршрутизатор
-}
-
 // Генератор событий
-func genEvent(nameType, namePublisher string, eventCh router.EventChan, done chan struct{}) {
-	defer log.Debugf("Генератор событий %s.%s прекратил работу", namePublisher, nameType)
-	for i := 0; i < 1000; i++ {
-		select {
-		case <-done:
-			return
-		default:
-			event := router.Event{
-				Id:          i,
-				Publisher:   namePublisher,
-				TypeEvent:   nameType,
-				TimePublish: time.Now(),
-				Message:     fmt.Sprintf("Событие %s:%d", nameType, i),
-			}
-			eventCh <- event
-			time.Sleep(1 * time.Second)
-		}
+func genEvent(nameType, namePublisher string, eventCh router.EventChan) func() {
+	done := make(chan struct{})
+	cancel := func() {
+		close(done)
 	}
+	go func() {
+		defer log.Debugf("Генератор событий %s.%s прекратил работу", namePublisher, nameType)
+		for i := 0; i < 1000; i++ {
+			select {
+			case <-done:
+				return
+			default:
+				event := router.Event{
+					Id:          i,
+					Publisher:   namePublisher,
+					TypeEvent:   nameType,
+					TimePublish: time.Now(),
+					Message:     fmt.Sprintf("Событие %s:%d", nameType, i),
+				}
+				eventCh <- event
+				time.Sleep(1 * time.Second)
+			}
+		}
+	}()
+	return cancel
 }

@@ -9,7 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func startSubscribers(confSubscribers []conf.Consumer, subscriberChan router.SubscriberChan) func() {
+func StartSubscribers(confSubscribers []conf.Consumer, subscriberChan router.SubscriberChan) func() {
 	consumers := make(map[string]func())
 	cancelAllSubscriber := func() {
 		for _, itemFunc := range consumers {

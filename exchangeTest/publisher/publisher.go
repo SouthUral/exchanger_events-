@@ -25,7 +25,7 @@ import (
 // eventCh - канал для отправки событий во внутренний маршрутизатор;
 // confPublishers - структура с кофигурациями отправителей;
 // rmqURL - URL для подключения к RabbitMQ
-func StartPublishers(eventCh router.EventChan, confPublishers []conf.Publisher, eventChan router.EventChan) func() {
+func StartPublishers(confPublishers []conf.Publisher, eventChan router.EventChan) func() {
 	publishersStorage := make(map[string]func())
 
 	closeAllPublishers := func() {

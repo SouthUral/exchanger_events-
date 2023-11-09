@@ -3,6 +3,8 @@ package router
 import (
 	"time"
 
+	conf "github.com/SouthUral/exchangeTest/confreader"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -43,31 +45,31 @@ func publishRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{
 				publisherData.eventCh <- event
 			}
 		case sub := <-subscrCh:
-			for _, pub := range sub.publishers {
-				publisherData, ok := publishers[pub.name]
+			for _, pub := range sub.Publishers {
+				publisherData, ok := publishers[pub.Name]
 				if ok {
 					// в маршрутизатор отправителя попадет информация только по текущему отправителю
 					publisherData.subscrCh <- SubscriberMess{
-						name:       sub.name,
-						types:      sub.types,
-						publishers: []publisher{pub},
-						allEvent:   sub.allEvent,
-						evenCh:     sub.evenCh,
+						Name:       sub.Name,
+						Types:      sub.Types,
+						Publishers: []conf.Publisher{pub},
+						AllEvent:   sub.AllEvent,
+						EvenCh:     sub.EvenCh,
 					}
 				} else {
 					// сообщение будет отсылаться до тех пор, пока не появится нужный отправитель
-					log.Warningf("Подписчик %s не может подписаться на отправителя %s, этот отправитель не существует", sub.name, pub.name)
+					log.Warningf("Подписчик %s не может подписаться на отправителя %s, этот отправитель не существует", sub.Name, pub.Name)
 					go func(subMess SubscriberMess) {
 						time.Sleep(5 * time.Second)
-						log.Debugf("Повторная попытка подписать %s на отправителя %s", subMess.name, subMess.publishers[0].name)
+						log.Debugf("Повторная попытка подписать %s на отправителя %s", subMess.Name, subMess.Publishers[0].Name)
 						subscrCh <- subMess
 						return
 					}(SubscriberMess{
-						name:       sub.name,
-						types:      sub.types,
-						publishers: []publisher{pub},
-						allEvent:   sub.allEvent,
-						evenCh:     sub.evenCh,
+						Name:       sub.Name,
+						Types:      sub.Types,
+						Publishers: []conf.Publisher{pub},
+						AllEvent:   sub.AllEvent,
+						EvenCh:     sub.EvenCh,
 					})
 				}
 			}
@@ -108,8 +110,8 @@ func publisherEventRouter(eventCh EventChan, subscrCh SubscriberChan, done chan 
 			typeRoutData.eventCh <- event
 		case sub := <-subscrCh:
 			// если publisher.types ничего не содержит, тогда получатель подписывается на все типы событий
-			if len(sub.publishers[0].types) == 0 {
-				sub.allEvent = true
+			if len(sub.Publishers[0].TypeMess) == 0 {
+				sub.AllEvent = true
 			}
 			typeRoutData.subscrCh <- sub
 		case <-done:

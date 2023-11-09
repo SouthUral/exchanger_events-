@@ -2,6 +2,8 @@ package router
 
 import (
 	"time"
+
+	conf "github.com/SouthUral/exchangeTest/confreader"
 )
 
 // Канал для отправки событий
@@ -21,11 +23,11 @@ type SubscriberChan chan SubscriberMess
 
 // Сообщение содержащее информацию о подписчике
 type SubscriberMess struct {
-	name       string
-	types      []string
-	publishers []publisher
-	allEvent   bool
-	evenCh     EventChan
+	Name       string
+	Types      []string
+	Publishers []conf.Publisher
+	AllEvent   bool
+	EvenCh     EventChan
 }
 
 // Структура которую возвращает инициализатор маршрутизатора (любого типа)
@@ -35,7 +37,7 @@ type eventRoutData struct {
 	cancel   func()
 }
 
-type publisher struct {
-	name  string
-	types []string
-}
+// type Publisher struct {
+// 	name  string
+// 	types []string
+// }

@@ -51,25 +51,25 @@ func typeRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}) 
 			}
 		case sub := <-subscrCh:
 			// отправка подписчика маршрутизатору всех типов
-			if sub.allEvent {
+			if sub.AllEvent {
 				allEventRouter.subscrCh <- sub
 			}
 
-			for _, eventType := range sub.types {
+			for _, eventType := range sub.Types {
 				eventData, ok := types[eventType]
 				if ok {
 					eventData.subscrCh <- sub
 				} else {
-					log.Warningf("Подписчик %s не может подписаться на тип события %s, этот тип события не существует", sub.name, eventType)
+					log.Warningf("Подписчик %s не может подписаться на тип события %s, этот тип события не существует", sub.Name, eventType)
 					go func(subMess SubscriberMess) {
 						time.Sleep(5 * time.Second)
-						log.Debugf("Повторная попытка подписать %s на событие %s", subMess.name, subMess.types[0])
+						log.Debugf("Повторная попытка подписать %s на событие %s", subMess.Name, subMess.Types[0])
 						subscrCh <- subMess
 						return
 					}(SubscriberMess{
-						name:   sub.name,
-						types:  []string{eventType},
-						evenCh: sub.evenCh,
+						Name:   sub.Name,
+						Types:  []string{eventType},
+						EvenCh: sub.EvenCh,
 					})
 				}
 
@@ -125,11 +125,11 @@ func typeEventRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struc
 				log.Debugf("Событие типа %s отправлено подписчику %s", event.TypeEvent, subscr)
 			}
 		case sub := <-subscrCh:
-			_, ok := subscribers[sub.name]
+			_, ok := subscribers[sub.Name]
 			if ok {
-				log.Warningf("%s уже подписан на тип событий %s", sub.name, eventType)
+				log.Warningf("%s уже подписан на тип событий %s", sub.Name, eventType)
 			} else {
-				subscribers[sub.name] = sub.evenCh
+				subscribers[sub.Name] = sub.EvenCh
 			}
 		case <-done:
 			return

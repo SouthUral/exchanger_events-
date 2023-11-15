@@ -1,0 +1,29 @@
+syntax = "proto3";
+package exchangeEvents;
+
+option go_package = "github.com/SouthUral/exchangeTest/grpc";
+
+service ExchangeEvents {
+    rpc sendingEvent(Event) returns (EventID);
+    rpc subscribingEvents(ConsumerData) returns (stream Event);
+}
+
+message Event {
+    string publisher = 1;
+    string typeEvent = 2;
+    bytes message = 3;
+}
+
+message EventID {
+    int64 id = 1;
+}
+
+message ConsumerData {
+    message TypesEvents {
+        repeated string types = 1;
+    }
+    string name = 1;
+    TypesEvents types = 2;
+    map <string, TypesEvents> publishers = 3;
+    bool allEvents = 4;
+}

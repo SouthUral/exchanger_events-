@@ -11,7 +11,7 @@ service ExchangeEvents {
 message Event {
     string publisher = 1;
     string typeEvent = 2;
-    bytes message = 3;
+    string message = 3;
 }
 
 message EventID {

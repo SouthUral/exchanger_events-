@@ -39,11 +39,14 @@ func Subscriber(subscribeConf conf.Consumer, subscriberChan router.SubscriberCha
 	}
 	// TODO: тут нужно где-то проверить конфиг, чтобы типы в отправителях не пересекались с общими типами
 	subMes := router.SubscriberMess{
-		Name:       subscribeConf.Name,
-		Types:      subscribeConf.Types,
-		Publishers: subscribeConf.Publishers,
-		AllEvent:   subscribeConf.AllEvent,
-		EvenCh:     selfEventCh,
+		Name: subscribeConf.Name,
+		ConfSubscribe: router.ConfSub{
+			Types:      subscribeConf.Types,
+			Publishers: subscribeConf.Publishers,
+			AllEvent:   subscribeConf.AllEvent,
+		},
+
+		EvenCh: selfEventCh,
 	}
 
 	go func() {

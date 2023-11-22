@@ -23,11 +23,16 @@ type SubscriberChan chan SubscriberMess
 
 // Сообщение содержащее информацию о подписчике
 type SubscriberMess struct {
-	Name       string
-	Types      []string
-	Publishers []conf.Publisher
-	AllEvent   bool
-	EvenCh     EventChan
+	Name          string
+	ConfSubscribe ConfSub
+	EvenCh        EventChan
+}
+
+// Конфигурация подписки
+type ConfSub struct {
+	Types      []string         `json:"types"`
+	Publishers []conf.Publisher `json:"publishers"`
+	AllEvent   bool             `json:"all_event"`
 }
 
 // Структура которую возвращает инициализатор маршрутизатора (любого типа)
@@ -36,8 +41,3 @@ type eventRoutData struct {
 	subscrCh SubscriberChan
 	cancel   func()
 }
-
-// type Publisher struct {
-// 	name  string
-// 	types []string
-// }

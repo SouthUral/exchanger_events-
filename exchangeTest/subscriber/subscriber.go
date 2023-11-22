@@ -4,12 +4,12 @@ import (
 	"time"
 
 	conf "github.com/SouthUral/exchangeTest/confreader"
-	router "github.com/SouthUral/exchangeTest/router"
+	rt "github.com/SouthUral/exchangeTest/router"
 
 	log "github.com/sirupsen/logrus"
 )
 
-func StartSubscribers(confSubscribers []conf.Consumer, subscriberChan router.SubscriberChan) func() {
+func StartSubscribers(confSubscribers []conf.Consumer, subscriberChan rt.SubscriberChan) func() {
 	consumers := make(map[string]func())
 	cancelAllSubscriber := func() {
 		for _, itemFunc := range consumers {
@@ -30,22 +30,31 @@ func StartSubscribers(confSubscribers []conf.Consumer, subscriberChan router.Sub
 // TODO: запустить цикл прослушки (получение) событий
 // TODO: нужно сразу освобождать канал, для того чтобы там не накапливались события
 // TODO: нужна проверка уникальности события, оно не должно приходить два раза, при проверке выдавать ошибку, если уже есть похожее событие
-func Subscriber(subscribeConf conf.Consumer, subscriberChan router.SubscriberChan) func() {
-	selfEventCh := make(router.EventChan, 100)
+func Subscriber(subscribeConf conf.Consumer, subscriberChan rt.SubscriberChan) func() {
+	selfEventCh := make(rt.EventChan, 100)
 
 	done := make(chan struct{})
 	cancel := func() {
 		close(done)
 	}
+
+	publishers := make([]rt.Publisher, 0)
+	for _, item := range subscribeConf.Publishers {
+		pub := rt.Publisher{
+			Name:     item.Name,
+			TypeMess: item.TypeMess,
+		}
+		publishers = append(publishers, pub)
+	}
+
 	// TODO: тут нужно где-то проверить конфиг, чтобы типы в отправителях не пересекались с общими типами
-	subMes := router.SubscriberMess{
+	subMes := rt.SubscriberMess{
 		Name: subscribeConf.Name,
-		ConfSubscribe: router.ConfSub{
+		ConfSubscribe: rt.ConfSub{
 			Types:      subscribeConf.Types,
-			Publishers: subscribeConf.Publishers,
+			Publishers: publishers,
 			AllEvent:   subscribeConf.AllEvent,
 		},
-
 		EvenCh: selfEventCh,
 	}
 

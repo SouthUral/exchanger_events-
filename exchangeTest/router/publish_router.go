@@ -3,8 +3,6 @@ package router
 import (
 	"time"
 
-	conf "github.com/SouthUral/exchangeTest/confreader"
-
 	log "github.com/sirupsen/logrus"
 )
 
@@ -54,7 +52,7 @@ func publishRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{
 						Name: sub.Name,
 						ConfSubscribe: ConfSub{
 							Types:      subConf.Types,
-							Publishers: []conf.Publisher{pub},
+							Publishers: []Publisher{pub},
 							AllEvent:   subConf.AllEvent,
 						},
 						EvenCh: sub.EvenCh,
@@ -71,7 +69,7 @@ func publishRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{
 						Name: sub.Name,
 						ConfSubscribe: ConfSub{
 							Types:      subConf.Types,
-							Publishers: []conf.Publisher{pub},
+							Publishers: []Publisher{pub},
 							AllEvent:   subConf.AllEvent,
 						},
 						EvenCh: sub.EvenCh,

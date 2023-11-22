@@ -2,8 +2,6 @@ package router
 
 import (
 	"time"
-
-	conf "github.com/SouthUral/exchangeTest/confreader"
 )
 
 // Канал для отправки событий
@@ -30,9 +28,14 @@ type SubscriberMess struct {
 
 // Конфигурация подписки
 type ConfSub struct {
-	Types      []string         `json:"types"`
-	Publishers []conf.Publisher `json:"publishers"`
-	AllEvent   bool             `json:"all_event"`
+	Types      []string    `json:"types"`
+	Publishers []Publisher `json:"publishers"`
+	AllEvent   bool        `json:"all_event"`
+}
+
+type Publisher struct {
+	Name     string   `json:"name"`
+	TypeMess []string `json:"type_mess"`
 }
 
 // Структура которую возвращает инициализатор маршрутизатора (любого типа)

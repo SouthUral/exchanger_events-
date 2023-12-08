@@ -16,7 +16,7 @@ import (
 	"time"
 
 	conf "github.com/SouthUral/exchangeTest/confreader"
-	router "github.com/SouthUral/exchangeTest/router"
+	models "github.com/SouthUral/exchangeTest/models"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -25,7 +25,7 @@ import (
 // eventCh - канал для отправки событий во внутренний маршрутизатор;
 // confPublishers - структура с кофигурациями отправителей;
 // rmqURL - URL для подключения к RabbitMQ
-func StartPublishers(confPublishers []conf.Publisher, eventChan router.EventChan) func() {
+func StartPublishers(confPublishers []conf.Publisher, eventChan models.EventChan) func() {
 	publishersStorage := make(map[string]func())
 
 	closeAllPublishers := func() {
@@ -42,14 +42,14 @@ func StartPublishers(confPublishers []conf.Publisher, eventChan router.EventChan
 }
 
 // генерирует и отправляет события во внутренний маршрутизатор и в exchange Rabbit
-func publisher(confPublisher conf.Publisher, eventCh router.EventChan) func() {
+func publisher(confPublisher conf.Publisher, eventCh models.EventChan) func() {
 	// TODO: функция генерации события (горутина, отправляет событие в Rabbit горутину и в маршрутизатор)
 	// TODO: отправка события в внутренний маршрутизатор
 	done := make(chan struct{})
 	cancel := func() {
 		close(done)
 	}
-	selfEventsCh := make(router.EventChan, 100)
+	selfEventsCh := make(models.EventChan, 100)
 
 	go func() {
 		defer log.Debugf("Отправитель %s прекратил работу", confPublisher.Name)
@@ -75,7 +75,7 @@ func publisher(confPublisher conf.Publisher, eventCh router.EventChan) func() {
 }
 
 // Генератор событий
-func genEvent(nameType, namePublisher string, eventCh router.EventChan) func() {
+func genEvent(nameType, namePublisher string, eventCh models.EventChan) func() {
 	done := make(chan struct{})
 	cancel := func() {
 		close(done)
@@ -87,7 +87,7 @@ func genEvent(nameType, namePublisher string, eventCh router.EventChan) func() {
 			case <-done:
 				return
 			default:
-				event := router.Event{
+				event := models.Event{
 					Id:          i,
 					Publisher:   namePublisher,
 					TypeEvent:   nameType,

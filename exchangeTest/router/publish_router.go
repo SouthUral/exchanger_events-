@@ -3,13 +3,14 @@ package router
 import (
 	"time"
 
+	models "github.com/SouthUral/exchangeTest/models"
 	log "github.com/sirupsen/logrus"
 )
 
 // Функция для инициализации маршрутизатора событий по отправителям
 func initPublishRouter() eventRoutData {
-	eventCh := make(EventChan, 100)
-	subscrCh := make(SubscriberChan, 100)
+	eventCh := make(models.EventChan, 100)
+	subscrCh := make(models.SubscriberChan, 100)
 	done := make(chan struct{})
 	cancel := func() {
 		close(done)
@@ -26,7 +27,7 @@ func initPublishRouter() eventRoutData {
 }
 
 // Маршрутизатор событий по отправителю
-func publishRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}) {
+func publishRouter(eventCh models.EventChan, subscrCh models.SubscriberChan, done chan struct{}) {
 	defer log.Debugf("Работа маршрутизатора типов событий завершена")
 
 	publishers := make(map[string]eventRoutData)
@@ -48,11 +49,11 @@ func publishRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{
 				publisherData, ok := publishers[pub.Name]
 				if ok {
 					// в маршрутизатор отправителя попадет информация только по текущему отправителю
-					publisherData.subscrCh <- SubscriberMess{
+					publisherData.subscrCh <- models.SubscriberMess{
 						Name: sub.Name,
-						ConfSubscribe: ConfSub{
+						ConfSubscribe: models.ConfSub{
 							Types:      subConf.Types,
-							Publishers: []Publisher{pub},
+							Publishers: []models.Publisher{pub},
 							AllEvent:   subConf.AllEvent,
 						},
 						EvenCh: sub.EvenCh,
@@ -60,16 +61,16 @@ func publishRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{
 				} else {
 					// сообщение будет отсылаться до тех пор, пока не появится нужный отправитель
 					log.Warningf("Подписчик %s не может подписаться на отправителя %s, этот отправитель не существует", sub.Name, pub.Name)
-					go func(subMess SubscriberMess) {
+					go func(subMess models.SubscriberMess) {
 						time.Sleep(5 * time.Second)
 						log.Debugf("Повторная попытка подписать %s на отправителя %s", subMess.Name, subMess.ConfSubscribe.Publishers[0].Name)
 						subscrCh <- subMess
 						return
-					}(SubscriberMess{
+					}(models.SubscriberMess{
 						Name: sub.Name,
-						ConfSubscribe: ConfSub{
+						ConfSubscribe: models.ConfSub{
 							Types:      subConf.Types,
-							Publishers: []Publisher{pub},
+							Publishers: []models.Publisher{pub},
 							AllEvent:   subConf.AllEvent,
 						},
 						EvenCh: sub.EvenCh,
@@ -89,8 +90,8 @@ func initPublisherEventRouter(namePublisher string) eventRoutData {
 	done := make(chan struct{})
 
 	publisherData := eventRoutData{
-		eventCh:  make(EventChan, 100),
-		subscrCh: make(SubscriberChan, 100),
+		eventCh:  make(models.EventChan, 100),
+		subscrCh: make(models.SubscriberChan, 100),
 		cancel: func() {
 			close(done)
 		},
@@ -102,7 +103,7 @@ func initPublisherEventRouter(namePublisher string) eventRoutData {
 	return publisherData
 }
 
-func publisherEventRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}, namePublisher string) {
+func publisherEventRouter(eventCh models.EventChan, subscrCh models.SubscriberChan, done chan struct{}, namePublisher string) {
 	defer log.Debugf("работа маршрутизатора событий по отправителю %s завершена", namePublisher)
 
 	typeRoutData := initTypeRouter()

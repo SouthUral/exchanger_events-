@@ -3,13 +3,14 @@ package router
 import (
 	"time"
 
+	models "github.com/SouthUral/exchangeTest/models"
 	log "github.com/sirupsen/logrus"
 )
 
 // Функция для инициализации маршрутизатора событий по типам
 func initTypeRouter() eventRoutData {
-	eventCh := make(EventChan, 100)
-	subscrCh := make(SubscriberChan, 100)
+	eventCh := make(models.EventChan, 100)
+	subscrCh := make(models.SubscriberChan, 100)
 	done := make(chan struct{})
 	cancel := func() {
 		close(done)
@@ -26,7 +27,7 @@ func initTypeRouter() eventRoutData {
 }
 
 // Маршрутизатор сообщений по типу
-func typeRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}) {
+func typeRouter(eventCh models.EventChan, subscrCh models.SubscriberChan, done chan struct{}) {
 	defer log.Debugf("Работа маршрутизатора типов событий завершена")
 
 	types := make(map[string]eventRoutData)
@@ -62,14 +63,14 @@ func typeRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}) 
 					eventData.subscrCh <- subMess
 				} else {
 					log.Warningf("Подписчик %s не может подписаться на тип события %s, этот тип события не существует", subMess.Name, eventType)
-					go func(subMess SubscriberMess) {
+					go func(subMess models.SubscriberMess) {
 						time.Sleep(5 * time.Second)
 						log.Debugf("Повторная попытка подписать %s на событие %s", subMess.Name, subConf.Types[0])
 						subscrCh <- subMess
 						return
-					}(SubscriberMess{
+					}(models.SubscriberMess{
 						Name: subMess.Name,
-						ConfSubscribe: ConfSub{
+						ConfSubscribe: models.ConfSub{
 							Types: []string{eventType},
 						},
 						EvenCh: subMess.EvenCh,
@@ -90,8 +91,8 @@ func initTypeEventRouter(eventType string) eventRoutData {
 	done := make(chan struct{})
 
 	routData := eventRoutData{
-		eventCh:  make(EventChan, 100),
-		subscrCh: make(SubscriberChan, 100),
+		eventCh:  make(models.EventChan, 100),
+		subscrCh: make(models.SubscriberChan, 100),
 		cancel: func() {
 			close(done)
 		},
@@ -108,10 +109,10 @@ func initTypeEventRouter(eventType string) eventRoutData {
 // Содержит словарь со всеми подписчиками.
 // При получении события отправляет его всем подписчикам.
 // При получении подписчика, сохраняет его в свой словарь.
-func typeEventRouter(eventCh EventChan, subscrCh SubscriberChan, done chan struct{}, eventType string) {
+func typeEventRouter(eventCh models.EventChan, subscrCh models.SubscriberChan, done chan struct{}, eventType string) {
 	defer log.Debugf("Работа маршрутизатора типа %s завершена", eventType)
 
-	subscribers := make(map[string]EventChan)
+	subscribers := make(map[string]models.EventChan)
 
 	for {
 		select {

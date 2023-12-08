@@ -1,6 +1,7 @@
 package router
 
 import (
+	models "github.com/SouthUral/exchangeTest/models"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -17,7 +18,7 @@ import (
 // TODO: Маршрутизатор подписчиков (принимает входящие каналы подписчиков от маршрутизаторов)
 
 // Функция для запуска маршрутизатора
-func InitRouter() (EventChan, SubscriberChan, func()) {
+func InitRouter() (models.EventChan, models.SubscriberChan, func()) {
 	// TODO: нужно понять какой буфер делать у каналов
 
 	typeRoutData := initTypeRouter()
@@ -38,8 +39,8 @@ func InitRouter() (EventChan, SubscriberChan, func()) {
 }
 
 // Инициализатор маршрутизатора событий
-func initEventRouter(typeEventRoutCh, publishEventRoutCh EventChan) (EventChan, func()) {
-	eventCh := make(EventChan, 100)
+func initEventRouter(typeEventRoutCh, publishEventRoutCh models.EventChan) (models.EventChan, func()) {
+	eventCh := make(models.EventChan, 100)
 	done := make(chan struct{})
 	cancel := func() {
 		close(done)
@@ -63,8 +64,8 @@ func initEventRouter(typeEventRoutCh, publishEventRoutCh EventChan) (EventChan, 
 }
 
 // Инициализатор маршрутизатора сообщений получателей
-func initSubscribeRouter(typeSubscRoutCh, publishSubscRoutCh SubscriberChan) (SubscriberChan, func()) {
-	subCh := make(SubscriberChan, 100)
+func initSubscribeRouter(typeSubscRoutCh, publishSubscRoutCh models.SubscriberChan) (models.SubscriberChan, func()) {
+	subCh := make(models.SubscriberChan, 100)
 	done := make(chan struct{})
 	cancel := func() {
 		close(done)

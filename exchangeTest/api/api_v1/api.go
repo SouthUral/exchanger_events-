@@ -7,12 +7,14 @@ import (
 	ut "github.com/SouthUral/exchangeTest/api/utils"
 	pb "github.com/SouthUral/exchangeTest/grpc"
 
+	models "github.com/SouthUral/exchangeTest/models"
+
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
 func initServer() server {
-	evtCh := make(EventAPICh, 100)
+	evtCh := make(models.EventAPICh, 100)
 
 	srv := server{
 		eventCh: evtCh,
@@ -22,7 +24,7 @@ func initServer() server {
 }
 
 type server struct {
-	eventCh EventAPICh
+	eventCh models.EventAPICh
 }
 
 // Логика приема события от отправителя
@@ -37,8 +39,8 @@ func (s *server) SendingEvent(ctx context.Context, in *pb.Event, opts ...grpc.Ca
 		return &answer, err
 	}
 
-	revCh := make(ReverseCh)
-	mess := EventApi{
+	revCh := make(models.ReverseCh)
+	mess := models.EventApi{
 		RevСh: revCh,
 		Event: event,
 	}

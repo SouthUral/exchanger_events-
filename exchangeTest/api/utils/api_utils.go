@@ -5,19 +5,19 @@ import (
 	"time"
 
 	pb "github.com/SouthUral/exchangeTest/grpc"
-	rt "github.com/SouthUral/exchangeTest/router"
+	models "github.com/SouthUral/exchangeTest/models"
 )
 
 // Преобразует событие gRPC во внутренне событие
-func ConvertEvent(event *pb.Event) (rt.Event, error) {
-	var newEvent rt.Event
+func ConvertEvent(event *pb.Event) (models.Event, error) {
+	var newEvent models.Event
 
 	err := checkEvent(event)
 	if err != nil {
 		return newEvent, err
 	}
 
-	newEvent = rt.Event{
+	newEvent = models.Event{
 		Publisher:   event.Publisher,
 		TypeEvent:   event.TypeEvent,
 		TimePublish: time.Now(),

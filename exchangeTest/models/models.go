@@ -50,3 +50,38 @@ type Event struct {
 
 // Канал для отправки подписчиков
 type SubscriberChan chan SubscriberMess
+
+// Канал по которому API gRPC отправляют события
+type EventAPICh chan EventApi
+
+// Канал для ответного сообщения в API gRPC
+type ReverseCh chan ReverseMess
+
+// Канал для обратной связи, по которому будут возвращаться события от маршрутизатора
+type RevSubCh chan RevMessSub
+
+// Сообщение которое получит SubRouter в ответ на свой запрос
+type RevMessSub struct {
+	Event Event
+	Err   error
+}
+
+// Cтруктура содержит сообщение от API.
+type EventApi struct {
+	RevСh ReverseCh
+	Event Event
+}
+
+// Ответное сообщение для API
+type ReverseMess struct {
+	IdEvent int
+	Err     error
+}
+
+// Сообщения от SubRouter менеджеру потребителей
+type SubMess struct {
+	TypeMess    string         // тип сообщения (может быть сообщение об остановке, либо просто регистрация нового потребителя)
+	Conf        SubscriberMess // конфигурация по которой будет производится подписка в маршрутизаторе
+	ChooseEvent string         // либо послденее непрочитанное либо текущее
+	RevCh       RevSubCh       // канал по которому возвращаются события
+}

@@ -1,7 +1,6 @@
 package eventmange
 
 import (
-	apiV1 "github.com/SouthUral/exchangeTest/api/api_v1"
 	models "github.com/SouthUral/exchangeTest/models"
 
 	log "github.com/sirupsen/logrus"
@@ -10,7 +9,7 @@ import (
 // Внешняя функция, должна принять все каналы и запустить в горутине eventManager
 func InitEventManager(
 	eventRtCh models.EventChan, // канал для отправки событий в роутер
-	eventAPICh apiV1.EventAPICh, // канал для приема событий от API gRPC
+	eventAPICh models.EventAPICh, // канал для приема событий от API gRPC
 	lastID int, // id из БД
 ) func() {
 	done := make(chan struct{})
@@ -29,7 +28,7 @@ func InitEventManager(
 // Принимает событие от API gRPC выдет ему Id и отправляет обратно в API Id события.
 // Отправляет событие с Id в маршрутизатор
 // Отправляет событие с Id на сохранение в БД (пока непонятно в какую БД)
-func eventManager(lastID int, eventRtCh models.EventChan, eventAPICh apiV1.EventAPICh, done <-chan struct{}) {
+func eventManager(lastID int, eventRtCh models.EventChan, eventAPICh models.EventAPICh, done <-chan struct{}) {
 	// TODO: в будущем при запуске сервиса, нужно будет забрать последнее Id
 	defer log.Warning("eventManager is finished")
 
@@ -45,7 +44,7 @@ func eventManager(lastID int, eventRtCh models.EventChan, eventAPICh apiV1.Event
 			// отправка события в маршрутизатор
 			eventRtCh <- event
 
-			mess.RevСh <- apiV1.ReverseMess{
+			mess.RevСh <- models.ReverseMess{
 				IdEvent: currentId,
 				// пока Err nil, в будущем можно убрать
 				Err: nil,

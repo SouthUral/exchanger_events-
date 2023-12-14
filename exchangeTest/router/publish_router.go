@@ -10,7 +10,7 @@ import (
 // Функция для инициализации маршрутизатора событий по отправителям
 func initPublishRouter() eventRoutData {
 	eventCh := make(models.EventChan, 100)
-	subscrCh := make(models.SubscriberChan, 100)
+	subscrCh := make(chan models.SubscriberMess, 100)
 	done := make(chan struct{})
 	cancel := func() {
 		close(done)
@@ -27,7 +27,7 @@ func initPublishRouter() eventRoutData {
 }
 
 // Маршрутизатор событий по отправителю
-func publishRouter(eventCh models.EventChan, subscrCh models.SubscriberChan, done chan struct{}) {
+func publishRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMess, done chan struct{}) {
 	defer log.Debugf("Работа маршрутизатора типов событий завершена")
 
 	publishers := make(map[string]eventRoutData)
@@ -91,7 +91,7 @@ func initPublisherEventRouter(namePublisher string) eventRoutData {
 
 	publisherData := eventRoutData{
 		eventCh:  make(models.EventChan, 100),
-		subscrCh: make(models.SubscriberChan, 100),
+		subscrCh: make(chan models.SubscriberMess, 100),
 		cancel: func() {
 			close(done)
 		},
@@ -103,7 +103,7 @@ func initPublisherEventRouter(namePublisher string) eventRoutData {
 	return publisherData
 }
 
-func publisherEventRouter(eventCh models.EventChan, subscrCh models.SubscriberChan, done chan struct{}, namePublisher string) {
+func publisherEventRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMess, done chan struct{}, namePublisher string) {
 	defer log.Debugf("работа маршрутизатора событий по отправителю %s завершена", namePublisher)
 
 	typeRoutData := initTypeRouter()

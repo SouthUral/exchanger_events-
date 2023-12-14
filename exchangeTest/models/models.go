@@ -49,7 +49,7 @@ type Event struct {
 }
 
 // Канал для отправки подписчиков
-type SubscriberChan chan SubscriberMess
+// type SubscriberChan chan SubscriberMess
 
 // Канал по которому API gRPC отправляют события
 type EventAPICh chan EventApi

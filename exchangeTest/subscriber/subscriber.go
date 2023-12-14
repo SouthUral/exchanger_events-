@@ -9,7 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func StartSubscribers(confSubscribers []conf.Consumer, subscriberChan models.SubscriberChan) func() {
+func StartSubscribers(confSubscribers []conf.Consumer, subscriberChan chan models.SubscriberMess) func() {
 	consumers := make(map[string]func())
 	cancelAllSubscriber := func() {
 		for _, itemFunc := range consumers {
@@ -30,7 +30,7 @@ func StartSubscribers(confSubscribers []conf.Consumer, subscriberChan models.Sub
 // TODO: запустить цикл прослушки (получение) событий
 // TODO: нужно сразу освобождать канал, для того чтобы там не накапливались события
 // TODO: нужна проверка уникальности события, оно не должно приходить два раза, при проверке выдавать ошибку, если уже есть похожее событие
-func Subscriber(subscribeConf conf.Consumer, subscriberChan models.SubscriberChan) func() {
+func Subscriber(subscribeConf conf.Consumer, subscriberChan chan models.SubscriberMess) func() {
 	selfEventCh := make(models.EventChan, 100)
 
 	done := make(chan struct{})

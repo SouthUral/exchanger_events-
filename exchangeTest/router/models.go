@@ -7,6 +7,6 @@ import (
 // Структура которую возвращает инициализатор маршрутизатора (любого типа)
 type eventRoutData struct {
 	eventCh  models.EventChan
-	subscrCh models.SubscriberChan
+	subscrCh chan models.SubscriberMess
 	cancel   func()
 }

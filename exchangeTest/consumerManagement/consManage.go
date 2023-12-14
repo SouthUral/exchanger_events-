@@ -2,16 +2,33 @@ package consumermanagement
 
 import (
 	api "github.com/SouthUral/exchangeTest/api/api_v1"
-	rt "github.com/SouthUral/exchangeTest/router"
+
+	models "github.com/SouthUral/exchangeTest/models"
 )
 
 // Инициализирует менеджера получателей, который управляет внутренними получателями
-func InitConsManager(apiCh <-chan api.SubMess, subCh chan<- rt.SubscriberMess) func() {
+// TODO: нужно передать сюда состояние, которое будет выгружено из БД при запуске
+// либо придет пустая структура (значит что состояния нет в БД), либо придет структура и по ней будут инициализированы внутренние получатели
+
+// TODO: Нужно сделать три канала которые будут переданы сюда от модуля состояния:
+// Каналы на отправку:
+// 1-й канал - нужен для запросов на восстановление очереди // по каналу отправляется запрос со структурой в которой будет канал для обратного возврата событий
+// 2-й канал - нужен для отправки измененного состояния получателей (внутренний и промежуточный) и для отправки данных мониторинга очередей
+// 3-й канал - нужен для записи событий в БД
+
+// Каналы на получение:
+// TODO: Нужен канал от HTTP API, по которому будут поступать команды для получателей
+func InitConsManager(apiCh <-chan models.SubMess, subCh chan<- models.SubscriberMess) func() {
 	storageInfoCons := make(map[string]internalConsum)
 	done := make(chan struct{})
 	cancel := func() {
 		close(done)
 	}
+
+	// TODO: нужен map для хранения внутренних получателей
+	internalConsumers := make(map[string]InternalConsumer)
+	// TODO: здесь должен быть метод инициализации внутренних получателей
+
 	go func() {
 		for {
 			select {
@@ -21,7 +38,23 @@ func InitConsManager(apiCh <-chan api.SubMess, subCh chan<- rt.SubscriberMess) f
 
 				case api.ConnectingConsumer:
 					// тип сообщения (подключение потребителя)
+					confKey := mess.Conf.ConfSubscribe.GenStringVue()
+					cons, ok := internalConsumers[confKey]
+					// если внутренний получатель с такой конфигурацией уже есть то ему добавляется получатель
+					if ok {
+						cons.AddConsumer(subscriber{
+							name:  mess.Conf.Name,
+							subCh: mess.RevCh,
+						})
+					} else {
+						internalSub := InitInternalConsumer(mess.Conf.ConfSubscribe, subCh)
+						internalSub.AddConsumer(subscriber{
+							name:  mess.Conf.Name,
+							subCh: mess.RevCh,
+						})
+					}
 					// TODO: нужно реализовать проверки конфига, есть ли уже работающий внутренний потребитель с таким конфигом
+
 					// TODO: если конфиг найден, нужна проверка, есть ли этого конфига такой подписчик, если нет, то нужно создать подписчика
 					// TODO: если подписчик есть, нужна проверка в каком он состоянии, если подписчик активен, то нужно отправить ошибку, что такой подписчик уже есть.
 					// TODO: если подписчик есть и он не активен, то нужно привязать канал к этому подписчику и перевести подписчика в состояние активен
@@ -40,10 +73,4 @@ func InitConsManager(apiCh <-chan api.SubMess, subCh chan<- rt.SubscriberMess) f
 	// TODO: должен принимать канал для связи с API для управления и мониторинга получателей
 	// TODO: должен принимать канал для отрпавки сообщений регистрации получателей в маршрутизаторе
 	return cancel
-}
-
-// Промежуточный потребитель или очередь конкретного подписчика
-// Может иметь два состояние, активное и неактивное, в неактичном состоянии просто сохраняет события в очереди
-func queueConsumer() {
-
 }

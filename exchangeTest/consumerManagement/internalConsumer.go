@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 
-	rt "github.com/SouthUral/exchangeTest/router"
+	models "github.com/SouthUral/exchangeTest/models"
 )
 
 // Внутренний потребитель, по факту это внутрення очередь, получает события и присваивает им offset.
@@ -15,24 +15,24 @@ import (
 // Отправляет события на сохранения в БД.
 // структура внутреннего подписчика
 type InternalConsumer struct {
-	ConfConsum       rt.ConfSub            // конфигурация подписчика
-	Id               string                // внутренний ID по которому будет работать маршрутизатор
-	mx               sync.Mutex            // мьютекс, нужен для блокировки доступа
-	Subscribers      map[string]subscriber // map с подписчиками
-	SubChan          rt.SubscriberChan     // канал, по которому идет отправка информации о подписке на события
-	IncomingEventsCh rt.EventChan
+	ConfConsum       models.ConfSub               // конфигурация подписчика
+	Id               string                       // внутренний ID по которому будет работать маршрутизатор
+	mx               sync.Mutex                   // мьютекс, нужен для блокировки доступа
+	Subscribers      map[string]subscriber        // map с подписчиками
+	SubChan          chan<- models.SubscriberMess // канал, по которому идет отправка информации о подписке на события
+	IncomingEventsCh models.EventChan
 }
 
 // Инициализация внутреннего подписчика
 // TODO: для запуска нужен конфиг и канал для передачи сообщения подписки
-func InitInternalConsumer(conf rt.ConfSub, subChan rt.SubscriberChan) *InternalConsumer {
+func InitInternalConsumer(conf models.ConfSub, subChan chan<- models.SubscriberMess) *InternalConsumer {
 	intCons := InternalConsumer{
 		Id:               uuid.New().String(),
 		ConfConsum:       conf,
 		mx:               sync.Mutex{},
 		Subscribers:      make(map[string]subscriber),
 		SubChan:          subChan,
-		IncomingEventsCh: make(rt.EventChan, 100),
+		IncomingEventsCh: make(models.EventChan, 100),
 	}
 
 	intCons.SubscribingEvents()
@@ -43,7 +43,7 @@ func InitInternalConsumer(conf rt.ConfSub, subChan rt.SubscriberChan) *InternalC
 // метод для подписки на события в маршрутизаторе
 func (cons *InternalConsumer) SubscribingEvents() {
 	defer log.Info("the subscription message has been sent to the router")
-	cons.SubChan <- rt.SubscriberMess{
+	cons.SubChan <- models.SubscriberMess{
 		Name:          cons.Id,
 		ConfSubscribe: cons.ConfConsum,
 		EvenCh:        cons.IncomingEventsCh,
@@ -68,15 +68,13 @@ func (cons *InternalConsumer) mainInternalCons() {
 }
 
 // TODO: Метод добавления подписчика
-func (cons *InternalConsumer) AddConsumer(sub subscriber) error {
+func (cons *InternalConsumer) AddConsumer(sub subscriber) {
 	defer log.Infof("a subscriber: %s has been added to the queue", sub.name)
-
-	var err error
 
 	cons.mx.Lock()
 	_, ok := cons.Subscribers[sub.name]
 	if ok {
-		err = fmt.Errorf("")
+		// _ := fmt.Errorf("")
 	}
 	// нужно проверить активность подписчика
 	// если подписчик активен, то вернуть ошибку
@@ -95,6 +93,13 @@ func (cons *InternalConsumer) delConsumer(sub subscriber) {
 	cons.mx.Lock()
 	delete(cons.Subscribers, sub.name)
 	cons.mx.Unlock()
+}
+
+// Метод перевода подписчика в спящее  состояние.
+// В спящем состоянии промежуточный подписчик не перестает сущесвовать, но все активные процессы заканчиваются,
+// прекращается отправка событий в цикле этому подписчику, т.е. он удаляется из списка отправки.
+func (cons *InternalConsumer) sleepConsumer(sub subscriber) {
+
 }
 
 // TODO: горутна прослушивания событий

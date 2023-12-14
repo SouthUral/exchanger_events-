@@ -10,7 +10,7 @@ import (
 // Функция для инициализации маршрутизатора событий по типам
 func initTypeRouter() eventRoutData {
 	eventCh := make(models.EventChan, 100)
-	subscrCh := make(models.SubscriberChan, 100)
+	subscrCh := make(chan models.SubscriberMess, 100)
 	done := make(chan struct{})
 	cancel := func() {
 		close(done)
@@ -27,7 +27,7 @@ func initTypeRouter() eventRoutData {
 }
 
 // Маршрутизатор сообщений по типу
-func typeRouter(eventCh models.EventChan, subscrCh models.SubscriberChan, done chan struct{}) {
+func typeRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMess, done chan struct{}) {
 	defer log.Debugf("Работа маршрутизатора типов событий завершена")
 
 	types := make(map[string]eventRoutData)
@@ -92,7 +92,7 @@ func initTypeEventRouter(eventType string) eventRoutData {
 
 	routData := eventRoutData{
 		eventCh:  make(models.EventChan, 100),
-		subscrCh: make(models.SubscriberChan, 100),
+		subscrCh: make(chan models.SubscriberMess, 100),
 		cancel: func() {
 			close(done)
 		},
@@ -109,7 +109,7 @@ func initTypeEventRouter(eventType string) eventRoutData {
 // Содержит словарь со всеми подписчиками.
 // При получении события отправляет его всем подписчикам.
 // При получении подписчика, сохраняет его в свой словарь.
-func typeEventRouter(eventCh models.EventChan, subscrCh models.SubscriberChan, done chan struct{}, eventType string) {
+func typeEventRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMess, done chan struct{}, eventType string) {
 	defer log.Debugf("Работа маршрутизатора типа %s завершена", eventType)
 
 	subscribers := make(map[string]models.EventChan)

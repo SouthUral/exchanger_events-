@@ -18,7 +18,7 @@ import (
 // TODO: Маршрутизатор подписчиков (принимает входящие каналы подписчиков от маршрутизаторов)
 
 // Функция для запуска маршрутизатора
-func InitRouter() (models.EventChan, models.SubscriberChan, func()) {
+func InitRouter() (models.EventChan, chan models.SubscriberMess, func()) {
 	// TODO: нужно понять какой буфер делать у каналов
 
 	typeRoutData := initTypeRouter()
@@ -64,8 +64,8 @@ func initEventRouter(typeEventRoutCh, publishEventRoutCh models.EventChan) (mode
 }
 
 // Инициализатор маршрутизатора сообщений получателей
-func initSubscribeRouter(typeSubscRoutCh, publishSubscRoutCh models.SubscriberChan) (models.SubscriberChan, func()) {
-	subCh := make(models.SubscriberChan, 100)
+func initSubscribeRouter(typeSubscRoutCh, publishSubscRoutCh chan models.SubscriberMess) (chan models.SubscriberMess, func()) {
+	subCh := make(chan models.SubscriberMess, 100)
 	done := make(chan struct{})
 	cancel := func() {
 		close(done)

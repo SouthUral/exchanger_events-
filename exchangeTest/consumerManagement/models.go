@@ -1,12 +1,12 @@
 package consumermanagement
 
 import (
-	rt "github.com/SouthUral/exchangeTest/router"
+	models "github.com/SouthUral/exchangeTest/models"
 )
 
 // структура содержит информацию о внутреннем потребителе
 type internalConsum struct {
-	conf           rt.ConfSub
+	conf           models.ConfSub
 	internalConsCh chan messIntenalCons
 	consumers      map[string]infoQueueConsumer
 }
@@ -17,13 +17,6 @@ type messIntenalCons struct {
 	ConsCh   chan string
 }
 
-// конфигурация подписки
-// type confConsum struct {
-// 	Types      []string
-// 	Publishers map[string][]string
-// 	AllEvents  bool
-// }
-
 // Информация о пром.потр. (очереди)
 type infoQueueConsumer struct {
 	isActive  bool
@@ -33,5 +26,5 @@ type infoQueueConsumer struct {
 // структура содержащая информацию о подписчике и канале связи с ним
 type subscriber struct {
 	name  string
-	subCh chan string
+	subCh models.RevSubCh
 }

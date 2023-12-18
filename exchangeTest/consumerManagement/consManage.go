@@ -1,6 +1,8 @@
 package consumermanagement
 
 import (
+	"context"
+
 	api "github.com/SouthUral/exchangeTest/api/api_v1"
 
 	models "github.com/SouthUral/exchangeTest/models"
@@ -20,13 +22,9 @@ import (
 // TODO: Нужен канал от HTTP API, по которому будут поступать команды для получателей
 func InitConsManager(apiCh <-chan models.SubMess, subCh chan<- models.SubscriberMess) func() {
 	storageInfoCons := make(map[string]internalConsum)
-	done := make(chan struct{})
-	cancel := func() {
-		close(done)
-	}
 
-	// TODO: нужен map для хранения внутренних получателей
-	internalConsumers := make(map[string]InternalConsumer)
+	ctx, cancel := context.WithCancel(context.Background())
+
 	// TODO: здесь должен быть метод инициализации внутренних получателей
 
 	go func() {
@@ -73,4 +71,21 @@ func InitConsManager(apiCh <-chan models.SubMess, subCh chan<- models.Subscriber
 	// TODO: должен принимать канал для связи с API для управления и мониторинга получателей
 	// TODO: должен принимать канал для отрпавки сообщений регистрации получателей в маршрутизаторе
 	return cancel
+}
+
+// Менеджер внутренних получателей
+type ConsManager struct {
+	InternalConsumers map[string]InternalConsumer  // словарь для хранения экземпляров внутренних получателей
+	ApiCh             <-chan models.SubMess        // канал по которому приходят события от gRPC API
+	SubCh             chan<- models.SubscriberMess // канал в который нужно отправить сообщение для регистрации получателя в router
+}
+
+// Запуск работы менеджера получателей
+func (M *ConsManager) runWork(ctx context.Context) {
+
+}
+
+// Добавление внутреннего получателя в ConsManager.InternalConsumers
+func (M *ConsManager) addInternalConsumer(conf models.ConfSub) {
+
 }

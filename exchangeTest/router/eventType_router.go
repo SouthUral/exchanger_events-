@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"time"
 
 	models "github.com/SouthUral/exchangeTest/models"
@@ -8,32 +9,27 @@ import (
 )
 
 // Функция для инициализации маршрутизатора событий по типам
-func initTypeRouter() eventRoutData {
+func initTypeRouter(ctx context.Context) eventRoutData {
 	eventCh := make(models.EventChan, 100)
 	subscrCh := make(chan models.SubscriberMess, 100)
-	done := make(chan struct{})
-	cancel := func() {
-		close(done)
-	}
 
-	go typeRouter(eventCh, subscrCh, done)
+	go typeRouter(ctx, eventCh, subscrCh)
 	log.Debug("Запущен маршрутизатор типов событий")
 
 	return eventRoutData{
 		eventCh:  eventCh,
 		subscrCh: subscrCh,
-		cancel:   cancel,
 	}
 }
 
 // Маршрутизатор сообщений по типу
-func typeRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMess, done chan struct{}) {
+func typeRouter(ctx context.Context, eventCh models.EventChan, subscrCh chan models.SubscriberMess) {
 	defer log.Debugf("Работа маршрутизатора типов событий завершена")
 
 	types := make(map[string]eventRoutData)
 
 	// добавление маршрутизатора на все события
-	allEventRouter := initTypeEventRouter("allEvent")
+	allEventRouter := initTypeEventRouter(ctx, "allEvent")
 	types["allEvent"] = allEventRouter
 
 	for {
@@ -46,7 +42,7 @@ func typeRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMess, d
 			if ok {
 				routData.eventCh <- event
 			} else {
-				routData := initTypeEventRouter(event.TypeEvent)
+				routData := initTypeEventRouter(ctx, event.TypeEvent)
 				types[event.TypeEvent] = routData
 				routData.eventCh <- event
 			}
@@ -78,27 +74,21 @@ func typeRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMess, d
 				}
 
 			}
-		case <-done:
-			for _, routData := range types {
-				routData.cancel()
-			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
 
 // Запускает в отдельной горутине typeEventRouter (маршрутизатор типа)
-func initTypeEventRouter(eventType string) eventRoutData {
-	done := make(chan struct{})
+func initTypeEventRouter(ctx context.Context, eventType string) eventRoutData {
 
 	routData := eventRoutData{
 		eventCh:  make(models.EventChan, 100),
 		subscrCh: make(chan models.SubscriberMess, 100),
-		cancel: func() {
-			close(done)
-		},
 	}
 
-	go typeEventRouter(routData.eventCh, routData.subscrCh, done, eventType)
+	go typeEventRouter(ctx, routData.eventCh, routData.subscrCh, eventType)
 
 	log.Debugf("typeEventRouter для типа %s запущен", eventType)
 
@@ -109,7 +99,7 @@ func initTypeEventRouter(eventType string) eventRoutData {
 // Содержит словарь со всеми подписчиками.
 // При получении события отправляет его всем подписчикам.
 // При получении подписчика, сохраняет его в свой словарь.
-func typeEventRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMess, done chan struct{}, eventType string) {
+func typeEventRouter(ctx context.Context, eventCh models.EventChan, subscrCh chan models.SubscriberMess, eventType string) {
 	defer log.Debugf("Работа маршрутизатора типа %s завершена", eventType)
 
 	subscribers := make(map[string]models.EventChan)
@@ -117,12 +107,6 @@ func typeEventRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMe
 	for {
 		select {
 		case event := <-eventCh:
-			// проверка типа события (ошибки быть не дожно, проверка на всякий случай)
-			// if event.typeEvent != eventType {
-			// 	log.Errorf("Ожидается тип события %s, получен %s", eventType, event.typeEvent)
-			// 	continue
-			// }
-
 			// TODO: можно добавить отписку подписчика от данного типа событий
 			for subscr, ch := range subscribers {
 				ch <- event
@@ -135,7 +119,7 @@ func typeEventRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMe
 			} else {
 				subscribers[sub.Name] = sub.EvenCh
 			}
-		case <-done:
+		case <-ctx.Done():
 			return
 		}
 	}

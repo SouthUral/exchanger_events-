@@ -1,6 +1,8 @@
 package router
 
 import (
+	"context"
+
 	models "github.com/SouthUral/exchangeTest/models"
 	log "github.com/sirupsen/logrus"
 )
@@ -13,7 +15,6 @@ import (
 
 // TODO: Функукция для маршрутизации типов
 // TODO: Функция для маршрутизации по отправителям
-// TODO: Функция для маршрутизации всех событий (для подписчиков, которым нужны все события)
 // TODO: Маршрутизатор событий (принимает входящие каналы(для событий) от маршрутизаторов: типа, отправителя, по всем)
 // TODO: Маршрутизатор подписчиков (принимает входящие каналы подписчиков от маршрутизаторов)
 
@@ -21,55 +22,42 @@ import (
 func InitRouter() (models.EventChan, chan models.SubscriberMess, func()) {
 	// TODO: нужно понять какой буфер делать у каналов
 
-	typeRoutData := initTypeRouter()
-	publishRoutData := initPublishRouter()
+	ctx, cancel := context.WithCancel(context.Background())
 
-	eventCh, eventRoutCancel := initEventRouter(typeRoutData.eventCh, publishRoutData.eventCh)
-	subCh, subRoutCancel := initSubscribeRouter(typeRoutData.subscrCh, publishRoutData.subscrCh)
+	typeRoutData := initTypeRouter(ctx)
+	publishRoutData := initPublishRouter(ctx)
 
-	cancel := func() {
-		defer log.Debug("все маршрутизаторы выключены")
-		typeRoutData.cancel()
-		publishRoutData.cancel()
-		eventRoutCancel()
-		subRoutCancel()
-	}
+	eventCh := initEventRouter(ctx, typeRoutData.eventCh, publishRoutData.eventCh)
+	subCh := initSubscribeRouter(ctx, typeRoutData.subscrCh, publishRoutData.subscrCh)
 
 	return eventCh, subCh, cancel
 }
 
 // Инициализатор маршрутизатора событий
-func initEventRouter(typeEventRoutCh, publishEventRoutCh models.EventChan) (models.EventChan, func()) {
+func initEventRouter(ctx context.Context, typeEventRoutCh, publishEventRoutCh models.EventChan) models.EventChan {
 	eventCh := make(models.EventChan, 100)
-	done := make(chan struct{})
-	cancel := func() {
-		close(done)
-	}
 
 	go func() {
-		defer log.Debug("Работа маршрутизатора событий завершена")
+		defer log.Debug("работа маршрутизатора событий завершена")
 		for {
 			select {
 			case event := <-eventCh:
+				log.Infof("%s : %s", event.Publisher, event.TypeEvent)
 				typeEventRoutCh <- event
 				publishEventRoutCh <- event
-			case <-done:
+			case <-ctx.Done():
 				return
 			}
 		}
 	}()
 
 	log.Debug("маршрутизатор событий запущен")
-	return eventCh, cancel
+	return eventCh
 }
 
 // Инициализатор маршрутизатора сообщений получателей
-func initSubscribeRouter(typeSubscRoutCh, publishSubscRoutCh chan models.SubscriberMess) (chan models.SubscriberMess, func()) {
+func initSubscribeRouter(ctx context.Context, typeSubscRoutCh, publishSubscRoutCh chan models.SubscriberMess) chan models.SubscriberMess {
 	subCh := make(chan models.SubscriberMess, 100)
-	done := make(chan struct{})
-	cancel := func() {
-		close(done)
-	}
 
 	go func() {
 		defer log.Debug("работа маршутизатора сообщений получателей завершена")
@@ -78,12 +66,12 @@ func initSubscribeRouter(typeSubscRoutCh, publishSubscRoutCh chan models.Subscri
 			case subMess := <-subCh:
 				typeSubscRoutCh <- subMess
 				publishSubscRoutCh <- subMess
-			case <-done:
+			case <-ctx.Done():
 				return
 			}
 		}
 	}()
 
 	log.Debug("маршрутизатор сообщений получателей запущен")
-	return subCh, cancel
+	return subCh
 }

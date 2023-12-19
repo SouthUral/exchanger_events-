@@ -8,5 +8,4 @@ import (
 type eventRoutData struct {
 	eventCh  models.EventChan
 	subscrCh chan models.SubscriberMess
-	cancel   func()
 }

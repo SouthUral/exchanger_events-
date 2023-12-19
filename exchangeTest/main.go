@@ -33,8 +33,9 @@ func main() {
 	cancelPub := pub.StartPublishers(conf.Publishers, eventCh)
 	cancelSub := sub.StartSubscribers(conf.Consumers, subscrCh)
 
-	time.Sleep(2 * time.Minute)
+	time.Sleep(30 * time.Second)
 	cancelSub()
 	cancelPub()
 	cancelRouter()
+	time.Sleep(30 * time.Second)
 }

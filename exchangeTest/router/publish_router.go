@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"time"
 
 	models "github.com/SouthUral/exchangeTest/models"
@@ -8,26 +9,21 @@ import (
 )
 
 // Функция для инициализации маршрутизатора событий по отправителям
-func initPublishRouter() eventRoutData {
+func initPublishRouter(ctx context.Context) eventRoutData {
 	eventCh := make(models.EventChan, 100)
 	subscrCh := make(chan models.SubscriberMess, 100)
-	done := make(chan struct{})
-	cancel := func() {
-		close(done)
-	}
 
-	go publishRouter(eventCh, subscrCh, done)
+	go publishRouter(ctx, eventCh, subscrCh)
 	log.Debug("Запущен маршрутизатор событий по отправителю")
 
 	return eventRoutData{
 		eventCh:  eventCh,
 		subscrCh: subscrCh,
-		cancel:   cancel,
 	}
 }
 
 // Маршрутизатор событий по отправителю
-func publishRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMess, done chan struct{}) {
+func publishRouter(ctx context.Context, eventCh models.EventChan, subscrCh chan models.SubscriberMess) {
 	defer log.Debugf("Работа маршрутизатора типов событий завершена")
 
 	publishers := make(map[string]eventRoutData)
@@ -39,7 +35,7 @@ func publishRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMess
 			if ok {
 				publisherData.eventCh <- event
 			} else {
-				publisherData := initPublisherEventRouter(event.Publisher)
+				publisherData := initPublisherEventRouter(ctx, event.Publisher)
 				publishers[event.Publisher] = publisherData
 				publisherData.eventCh <- event
 			}
@@ -77,36 +73,29 @@ func publishRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMess
 					})
 				}
 			}
-		case <-done:
-			for _, publisherData := range publishers {
-				publisherData.cancel()
-			}
+		case <-ctx.Done():
 			return
 		}
 	}
 }
 
-func initPublisherEventRouter(namePublisher string) eventRoutData {
-	done := make(chan struct{})
+func initPublisherEventRouter(ctx context.Context, namePublisher string) eventRoutData {
 
 	publisherData := eventRoutData{
 		eventCh:  make(models.EventChan, 100),
 		subscrCh: make(chan models.SubscriberMess, 100),
-		cancel: func() {
-			close(done)
-		},
 	}
 
-	go publisherEventRouter(publisherData.eventCh, publisherData.subscrCh, done, namePublisher)
+	go publisherEventRouter(ctx, publisherData.eventCh, publisherData.subscrCh, namePublisher)
 	log.Debugf("publisherEventRouter для отправителя %s запущен", namePublisher)
 
 	return publisherData
 }
 
-func publisherEventRouter(eventCh models.EventChan, subscrCh chan models.SubscriberMess, done chan struct{}, namePublisher string) {
+func publisherEventRouter(ctx context.Context, eventCh models.EventChan, subscrCh chan models.SubscriberMess, namePublisher string) {
 	defer log.Debugf("работа маршрутизатора событий по отправителю %s завершена", namePublisher)
 
-	typeRoutData := initTypeRouter()
+	typeRoutData := initTypeRouter(ctx)
 
 	for {
 		select {
@@ -119,8 +108,7 @@ func publisherEventRouter(eventCh models.EventChan, subscrCh chan models.Subscri
 				subConf.AllEvent = true
 			}
 			typeRoutData.subscrCh <- subMess
-		case <-done:
-			typeRoutData.cancel()
+		case <-ctx.Done():
 			return
 		}
 	}

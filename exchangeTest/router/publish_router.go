@@ -2,75 +2,57 @@ package router
 
 import (
 	"context"
-	"time"
 
-	models "github.com/SouthUral/exchangeTest/models"
 	log "github.com/sirupsen/logrus"
 )
 
+type publishRouter struct {
+	routData
+	pubEventRouters map[string]typeRouter
+}
+
 // Функция для инициализации маршрутизатора событий по отправителям
-func initPublishRouter(ctx context.Context) eventRoutData {
-	eventCh := make(models.EventChan, 100)
-	subscrCh := make(chan models.SubscriberMess, 100)
+func initPublishRouter(ctx context.Context, сapacityChanals int) publishRouter {
+	router := &publishRouter{}
 
-	go publishRouter(ctx, eventCh, subscrCh)
-	log.Debug("Запущен маршрутизатор событий по отправителю")
+	router.eventCh = make(chan Event, сapacityChanals)
+	router.subscrCh = make(chan SubscriberMess, сapacityChanals)
+	router.pubEventRouters = make(map[string]typeRouter, 100)
 
-	return eventRoutData{
-		eventCh:  eventCh,
-		subscrCh: subscrCh,
-	}
+	go router.routing(ctx)
+
+	return *router
 }
 
 // Маршрутизатор событий по отправителю
-func publishRouter(ctx context.Context, eventCh models.EventChan, subscrCh chan models.SubscriberMess) {
+func (p *publishRouter) routing(ctx context.Context) {
 	defer log.Debugf("Работа маршрутизатора типов событий завершена")
 
-	publishers := make(map[string]eventRoutData)
+	log.Debug("Запущен маршрутизатор событий по отправителю")
 
 	for {
 		select {
-		case event := <-eventCh:
-			publisherData, ok := publishers[event.Publisher]
+		case event := <-p.eventCh:
+			eventPub := event.GetPub()
+			publisherData, ok := p.pubEventRouters[eventPub]
 			if ok {
 				publisherData.eventCh <- event
 			} else {
-				publisherData := initPublisherEventRouter(ctx, event.Publisher)
-				publishers[event.Publisher] = publisherData
+				publisherData := initTypeRouter(ctx, 100)
+				p.pubEventRouters[eventPub] = publisherData
 				publisherData.eventCh <- event
 			}
-		case sub := <-subscrCh:
-			subConf := sub.ConfSubscribe
-			for _, pub := range subConf.Publishers {
-				publisherData, ok := publishers[pub.Name]
+		case subMess := <-p.subscrCh:
+			subPublishers := subMess.GetConfigSub().GetPublihers()
+			for pubName, eventTypes := range subPublishers {
+				typeRouter, ok := p.pubEventRouters[pubName]
+				copyMess := copySubMess(subMess, eventTypes)
 				if ok {
-					// в маршрутизатор отправителя попадет информация только по текущему отправителю
-					publisherData.subscrCh <- models.SubscriberMess{
-						Name: sub.Name,
-						ConfSubscribe: models.ConfSub{
-							Types:      subConf.Types,
-							Publishers: []models.Publisher{pub},
-							AllEvent:   subConf.AllEvent,
-						},
-						EvenCh: sub.EvenCh,
-					}
+					typeRouter.subscrCh <- &copyMess
 				} else {
-					// сообщение будет отсылаться до тех пор, пока не появится нужный отправитель
-					log.Warningf("Подписчик %s не может подписаться на отправителя %s, этот отправитель не существует", sub.Name, pub.Name)
-					go func(subMess models.SubscriberMess) {
-						time.Sleep(5 * time.Second)
-						log.Debugf("Повторная попытка подписать %s на отправителя %s", subMess.Name, subMess.ConfSubscribe.Publishers[0].Name)
-						subscrCh <- subMess
-						return
-					}(models.SubscriberMess{
-						Name: sub.Name,
-						ConfSubscribe: models.ConfSub{
-							Types:      subConf.Types,
-							Publishers: []models.Publisher{pub},
-							AllEvent:   subConf.AllEvent,
-						},
-						EvenCh: sub.EvenCh,
-					})
+					publisherData := initTypeRouter(ctx, 100)
+					p.pubEventRouters[pubName] = publisherData
+					publisherData.subscrCh <- &copyMess
 				}
 			}
 		case <-ctx.Done():
@@ -79,37 +61,19 @@ func publishRouter(ctx context.Context, eventCh models.EventChan, subscrCh chan 
 	}
 }
 
-func initPublisherEventRouter(ctx context.Context, namePublisher string) eventRoutData {
+// функция копирует сообщение от подписчика и берет типы событий одного отправителя из конфига и ставит их на место всех типов в конфиге.
+// Нужно для работы роутера по отправителям
+func copySubMess(mess SubscriberMess, evenTypes []string) subMess {
+	newMess := &subMess{}
+	newMess.name = mess.GetNameSub()
+	newMess.reverseCh = mess.GetReverseCh()
 
-	publisherData := eventRoutData{
-		eventCh:  make(models.EventChan, 100),
-		subscrCh: make(chan models.SubscriberMess, 100),
-	}
+	newConfig := &confSub{}
 
-	go publisherEventRouter(ctx, publisherData.eventCh, publisherData.subscrCh, namePublisher)
-	log.Debugf("publisherEventRouter для отправителя %s запущен", namePublisher)
+	newConfig.types = evenTypes
+	newConfig.allEvent = mess.GetConfigSub().GetAllEvent()
 
-	return publisherData
-}
+	newMess.config = newConfig
 
-func publisherEventRouter(ctx context.Context, eventCh models.EventChan, subscrCh chan models.SubscriberMess, namePublisher string) {
-	defer log.Debugf("работа маршрутизатора событий по отправителю %s завершена", namePublisher)
-
-	typeRoutData := initTypeRouter(ctx)
-
-	for {
-		select {
-		case event := <-eventCh:
-			typeRoutData.eventCh <- event
-		case subMess := <-subscrCh:
-			subConf := subMess.ConfSubscribe
-			// если publisher.types ничего не содержит, тогда получатель подписывается на все типы событий
-			if len(subConf.Publishers[0].TypeMess) == 0 {
-				subConf.AllEvent = true
-			}
-			typeRoutData.subscrCh <- subMess
-		case <-ctx.Done():
-			return
-		}
-	}
+	return *newMess
 }

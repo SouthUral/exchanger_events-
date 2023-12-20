@@ -3,7 +3,6 @@ package router
 import (
 	"context"
 
-	models "github.com/SouthUral/exchangeTest/models"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -19,13 +18,13 @@ import (
 // TODO: Маршрутизатор подписчиков (принимает входящие каналы подписчиков от маршрутизаторов)
 
 // Функция для запуска маршрутизатора
-func InitRouter() (models.EventChan, chan models.SubscriberMess, func()) {
+func InitRouter() (chan Event, chan SubscriberMess, func()) {
 	// TODO: нужно понять какой буфер делать у каналов
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	typeRoutData := initTypeRouter(ctx)
-	publishRoutData := initPublishRouter(ctx)
+	typeRoutData := initTypeRouter(ctx, 100)
+	publishRoutData := initPublishRouter(ctx, 100)
 
 	eventCh := initEventRouter(ctx, typeRoutData.eventCh, publishRoutData.eventCh)
 	subCh := initSubscribeRouter(ctx, typeRoutData.subscrCh, publishRoutData.subscrCh)
@@ -34,15 +33,15 @@ func InitRouter() (models.EventChan, chan models.SubscriberMess, func()) {
 }
 
 // Инициализатор маршрутизатора событий
-func initEventRouter(ctx context.Context, typeEventRoutCh, publishEventRoutCh models.EventChan) models.EventChan {
-	eventCh := make(models.EventChan, 100)
+func initEventRouter(ctx context.Context, typeEventRoutCh, publishEventRoutCh chan Event) chan Event {
+	eventCh := make(chan Event, 100)
 
 	go func() {
 		defer log.Debug("работа маршрутизатора событий завершена")
 		for {
 			select {
 			case event := <-eventCh:
-				log.Infof("%s : %s", event.Publisher, event.TypeEvent)
+				// log.Infof("%s : %s", event.Publisher, event.TypeEvent)
 				typeEventRoutCh <- event
 				publishEventRoutCh <- event
 			case <-ctx.Done():
@@ -56,8 +55,8 @@ func initEventRouter(ctx context.Context, typeEventRoutCh, publishEventRoutCh mo
 }
 
 // Инициализатор маршрутизатора сообщений получателей
-func initSubscribeRouter(ctx context.Context, typeSubscRoutCh, publishSubscRoutCh chan models.SubscriberMess) chan models.SubscriberMess {
-	subCh := make(chan models.SubscriberMess, 100)
+func initSubscribeRouter(ctx context.Context, typeSubscRoutCh, publishSubscRoutCh chan SubscriberMess) chan SubscriberMess {
+	subCh := make(chan SubscriberMess, 100)
 
 	go func() {
 		defer log.Debug("работа маршутизатора сообщений получателей завершена")

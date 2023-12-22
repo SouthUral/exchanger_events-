@@ -41,7 +41,6 @@ func initEventRouter(ctx context.Context, typeEventRoutCh, publishEventRoutCh ch
 		for {
 			select {
 			case event := <-eventCh:
-				// log.Infof("%s : %s", event.Publisher, event.TypeEvent)
 				typeEventRoutCh <- event
 				publishEventRoutCh <- event
 			case <-ctx.Done():

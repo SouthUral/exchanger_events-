@@ -2,12 +2,9 @@ package main
 
 import (
 	"os"
-	"time"
+	// "time"
 
-	confReader "github.com/SouthUral/exchangeTest/confreader"
-	pub "github.com/SouthUral/exchangeTest/publisher"
-	router "github.com/SouthUral/exchangeTest/router"
-	sub "github.com/SouthUral/exchangeTest/subscriber"
+	// router "github.com/SouthUral/exchangeTest/router"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -24,18 +21,18 @@ func init() {
 }
 
 func main() {
-	conf, err := confReader.LoadConfRabbit("./config/example.json")
-	if err != nil {
-		return
-	}
+	// conf, err := confReader.LoadConf("./config/example.json")
+	// if err != nil {
+	// 	return
+	// }
 
-	eventCh, subscrCh, cancelRouter := router.InitRouter()
-	cancelPub := pub.StartPublishers(conf.Publishers, eventCh)
-	cancelSub := sub.StartSubscribers(conf.Consumers, subscrCh)
+	// eventCh, subscrCh, cancelRouter := router.InitRouter()
+	// cancelPub := pub.StartPublishers(conf.Publishers, eventCh)
+	// cancelSub := sub.StartSubscribers(conf.Consumers, subscrCh)
 
-	time.Sleep(30 * time.Second)
-	cancelSub()
-	cancelPub()
-	cancelRouter()
-	time.Sleep(30 * time.Second)
+	// time.Sleep(5 * time.Minute)
+	// cancelSub()
+	// cancelPub()
+	// cancelRouter()
+	// time.Sleep(30 * time.Second)
 }

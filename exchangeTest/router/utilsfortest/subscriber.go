@@ -2,62 +2,28 @@ package utilsfortest
 
 import (
 	"context"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 )
 
-func StartSubscribers(confSubscribers []Consumer, subscriberChan chan SubscriberMess, numberMessages int) func() {
+// функция запускает всех получателей, возвращает cancel для закрытия горутин получателей и канал, по которому прийдут отчеты
+// Принимаемые параметры:
+// confSubscribers - список конфигурации подписчиков
+// subscriberChan - канал, который нужно получить от маршрутизатора, в него передается сообщение для подписки
+// numberMessages - количество сообщений которое будет сгенерировано по каждому типу событий
+// Возвращаемые параметры:
+// func() - функция cancel() контекста для прекращния работы всех получателей
+// chan reportSubTest - канал, по которому прийдут отчеты от горутин получателей
+func SubscribersWork(confSubscribers []Consumer, subscriberChan chan<- interface{}, numberMessages int) (func(), chan ReportSubTest) {
+	reportCh := make(chan ReportSubTest, len(confSubscribers))
 	ctx, cancel := context.WithCancel(context.Background())
-	for _, item := range confSubscribers {
-		Subscriber(ctx, item, subscriberChan, numberMessages)
+	for _, itemConsum := range confSubscribers {
+		subMes := initSubMess(itemConsum)
+		subscriberChan <- subMes
+		initSubTest(ctx, subMes, numberMessages, reportCh)
+
 	}
-	return cancel
-}
-
-// Функция для запуска подписчика.
-// Отправляет информацию о подписчике в router.SubscriberChan
-// TODO: нужна проверка конфига подписчика (типы событий не должны пересекаться с типами событий в Отправителе) иначе будут дубли
-// TODO: запустить цикл прослушки (получение) событий
-// TODO: нужно сразу освобождать канал, для того чтобы там не накапливались события
-// TODO: нужна проверка уникальности события, оно не должно приходить два раза, при проверке выдавать ошибку, если уже есть похожее событие
-func Subscriber(ctx context.Context, subscribeConf Consumer, subscriberChan chan SubscriberMess, resCh chan resultWork, numberMessages int) {
-	// TODO: тут нужно где-то проверить конфиг, чтобы типы в отправителях не пересекались с общими типами
-
-	subMes := initSubMess(subscribeConf)
-	listTypes := genListTypes(subMes.Config)
-	expectedNumberMess := countAllEvents(subMes.Config, numberMessages)
-
-	go func() {
-		defer log.Warningf("Подписчик %s прекратил работу", subscribeConf.Name)
-
-		var counterReceivedMess int
-
-		res := resultWork{
-			expectedNumberMess: expectedNumberMess,
-		}
-
-		for {
-			select {
-			case event := <-subMes.GetReverseCh():
-				counterReceivedMess++
-
-				timeDifference := time.Since(event.GetTimePub())
-				log.Infof("time difference = %v, subscriber: %s\n", timeDifference, subMes.Name)
-			case <-ctx.Done():
-				break
-			}
-		}
-
-		res.counterReceivedMess = counterReceivedMess
-
-		resCh <- res
-		return
-
-	}()
-
-	subscriberChan <- subMes
-
+	return cancel, reportCh
 }
 
 type keyEvent struct {
@@ -75,7 +41,8 @@ func (k keyEvent) GetTypeName() string {
 
 type subTest struct {
 	nameSub                   string
-	eventCh                   chan Event
+	eventCh                   chan interface{}
+	reportCh                  chan ReportSubTest
 	expectedNumberMess        int
 	counterReceivedMess       int
 	allEvent                  bool
@@ -83,46 +50,80 @@ type subTest struct {
 	unexpectedListCountEvents map[keyEvent]int
 }
 
-func (s *subTest) worker() {
-
+// стуктура для отчета
+type ReportSubTest struct {
+	NameSub                   string
+	ExpectedNumberMess        int
+	CounterReceivedMess       int
+	AllEvent                  bool
+	ExpectedlistCountEvents   map[keyEvent]int
+	UnexpectedListCountEvents map[keyEvent]int
 }
 
+func (s *subTest) worker(ctx context.Context) {
+	if s.allEvent {
+		go s.processWithAllEvent(ctx)
+	} else {
+		go s.processStandart(ctx)
+	}
+}
+
+// метод для генерации и отправки отчета
 func (s *subTest) generatingReport() {
-	// TODO: нужно создать структура для отчета и заполнить его
-	// TODO: нужно создать канал для отчетов, определить место его инициализации и передать туда отчет
-	// TODO: нужно отловить все отчеты горутин из каналов и вернуть их списком или структурой
+	report := ReportSubTest{
+		NameSub:                   s.nameSub,
+		ExpectedNumberMess:        s.expectedNumberMess,
+		CounterReceivedMess:       s.counterReceivedMess,
+		AllEvent:                  s.allEvent,
+		ExpectedlistCountEvents:   s.expectedlistCountEvents,
+		UnexpectedListCountEvents: s.unexpectedListCountEvents,
+	}
+
+	s.reportCh <- report
 }
 
-// процесс, запускаемый если allEvent == true
+// процесс получения событий, запускаемый если allEvent == true
 func (s *subTest) processWithAllEvent(ctx context.Context) {
 	for {
 		select {
 		case <-s.eventCh:
 			s.counterReceivedMess++
 		case <-ctx.Done():
+			s.generatingReport()
 			return
 		}
 	}
 
 }
 
+// процесс получения событий, запускаемый если флаг allEvent == false
 func (s *subTest) processStandart(ctx context.Context) {
 	for {
 		select {
 		case event := <-s.eventCh:
+			eventMsg, ok := event.(Event)
 			s.counterReceivedMess++
+
+			if !ok {
+				log.Errorf("получателю %s не удалось привести к типу событие", s.nameSub)
+				continue
+			}
+
+			// формируется ключ, в котором присутствет и отправитель и тип события
 			keyWithPublisher := keyEvent{
-				publisherName: event.GetPub(),
-				typeName:      event.GetTypeEvent(),
+				publisherName: eventMsg.GetPub(),
+				typeName:      eventMsg.GetTypeEvent(),
 			}
 			s.checkEvent(keyWithPublisher)
 
+			// формируется ключ, в котором есть только тип события
 			keyWithoutPublisher := keyEvent{
-				typeName: event.GetTypeEvent(),
+				typeName: eventMsg.GetTypeEvent(),
 			}
 			s.checkEvent(keyWithoutPublisher)
 
 		case <-ctx.Done():
+			s.generatingReport()
 			return
 		}
 	}
@@ -143,11 +144,12 @@ func (s *subTest) checkEvent(key keyEvent) {
 	}
 }
 
-func initSubTest(subMess subMess, numberMess int) subTest {
+func initSubTest(ctx context.Context, subMess subMess, numberMess int, reportCh chan ReportSubTest) subTest {
 	res := subTest{
 		nameSub:  subMess.GetNameSub(),
 		eventCh:  subMess.GetReverseCh(),
 		allEvent: subMess.GetConfigSub().GetAllEvent(),
+		reportCh: reportCh,
 	}
 
 	if res.allEvent {
@@ -157,6 +159,8 @@ func initSubTest(subMess subMess, numberMess int) subTest {
 	res.expectedNumberMess = countAllEvents(subMess.Config, numberMess)
 	res.expectedlistCountEvents = initExpectedListCountEvents(subMess.Config)
 	res.unexpectedListCountEvents = make(map[keyEvent]int)
+
+	res.worker(ctx)
 
 	return res
 }

@@ -22,11 +22,6 @@ type Publisher struct {
 	TypeMess []string `json:"type_mess"`
 }
 
-type resultWork struct {
-	counterReceivedMess int
-	expectedNumberMess  int
-}
-
 // структура события
 type event struct {
 	id          int
@@ -60,7 +55,7 @@ func (e event) GetMess() string {
 type subMess struct {
 	Name      string
 	Config    confSub
-	ReverseCh chan Event
+	ReverseCh chan interface{}
 }
 
 func (s subMess) GetNameSub() string {
@@ -71,12 +66,12 @@ func (s subMess) GetConfigSub() ConfSub {
 	return s.Config
 }
 
-func (s subMess) GetReverseCh() chan Event {
+func (s subMess) GetReverseCh() chan interface{} {
 	return s.ReverseCh
 }
 
 func initSubMess(subData Consumer) subMess {
-	selfEventCh := make(chan Event, 100)
+	selfEventCh := make(chan interface{}, 100)
 
 	config := initConSub(subData)
 

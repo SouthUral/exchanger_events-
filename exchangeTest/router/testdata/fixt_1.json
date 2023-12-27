@@ -2,10 +2,11 @@
     "publishers": 
     [
         {
-            "name": "publisher_3",
+            "name": "publisher_1",
             "type_mess": 
             [
-                "type_4"
+                "type_1",
+                "type_2"
             ]    
         }    
     ],
@@ -15,7 +16,7 @@
             "name": "consumer_1",
             "publishers": [
                 {
-                    "name": "publisher_3"
+                    "name": "publisher_1"
                 }
             ]
         }

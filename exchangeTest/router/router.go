@@ -18,7 +18,7 @@ import (
 // TODO: Маршрутизатор подписчиков (принимает входящие каналы подписчиков от маршрутизаторов)
 
 // Функция для запуска маршрутизатора
-func InitRouter() (chan Event, chan SubscriberMess, func()) {
+func InitRouter() (chan interface{}, chan interface{}, func()) {
 	// TODO: нужно понять какой буфер делать у каналов
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -33,16 +33,20 @@ func InitRouter() (chan Event, chan SubscriberMess, func()) {
 }
 
 // Инициализатор маршрутизатора событий
-func initEventRouter(ctx context.Context, typeEventRoutCh, publishEventRoutCh chan Event) chan Event {
-	eventCh := make(chan Event, 100)
+func initEventRouter(ctx context.Context, typeEventRoutCh, publishEventRoutCh chan Event) chan interface{} {
+	eventCh := make(chan interface{}, 100)
 
 	go func() {
 		defer log.Debug("работа маршрутизатора событий завершена")
 		for {
 			select {
 			case event := <-eventCh:
-				typeEventRoutCh <- event
-				publishEventRoutCh <- event
+				eventMsg, ok := event.(Event)
+				if !ok {
+					log.Fatal("невозможно преобразовать событие к типу Event")
+				}
+				typeEventRoutCh <- eventMsg
+				publishEventRoutCh <- eventMsg
 			case <-ctx.Done():
 				return
 			}
@@ -54,14 +58,18 @@ func initEventRouter(ctx context.Context, typeEventRoutCh, publishEventRoutCh ch
 }
 
 // Инициализатор маршрутизатора сообщений получателей
-func initSubscribeRouter(ctx context.Context, typeSubscRoutCh, publishSubscRoutCh chan SubscriberMess) chan SubscriberMess {
-	subCh := make(chan SubscriberMess, 100)
+func initSubscribeRouter(ctx context.Context, typeSubscRoutCh, publishSubscRoutCh chan SubscriberMess) chan interface{} {
+	subCh := make(chan interface{}, 100)
 
 	go func() {
 		defer log.Debug("работа маршутизатора сообщений получателей завершена")
 		for {
 			select {
-			case subMess := <-subCh:
+			case sub := <-subCh:
+				subMess, ok := sub.(SubscriberMess)
+				if !ok {
+					log.Fatal("невозможно преобразовать сообщение от получателя к типу SubscriberMess")
+				}
 				typeSubscRoutCh <- subMess
 				publishSubscRoutCh <- subMess
 			case <-ctx.Done():

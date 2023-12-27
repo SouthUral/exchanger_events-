@@ -14,6 +14,7 @@ package utilsfortest
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -24,34 +25,44 @@ import (
 // confPublishers - структура с кофигурациями отправителей;
 // rmqURL - URL для подключения к RabbitMQ
 // numberMessages - количество сообщений, которые должны отправить отправители
-func StartPublishers(confPublishers []Publisher, eventChan chan Event, numberMessages int) func() {
+func StartPublishers(confPublishers []Publisher, eventChan chan interface{}, numberMessages int) context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
 
-	for _, pubslishConf := range confPublishers {
-		startPublisher(ctx, pubslishConf, eventChan, numberMessages)
-	}
+	go func() {
+		defer cancel()
+		for _, pubslishConf := range confPublishers {
+			wg.Add(1)
+			startPublisher(ctx, pubslishConf, eventChan, numberMessages, &wg)
+		}
 
-	return cancel
+		wg.Wait()
+	}()
+
+	return ctx
 }
 
 // генерирует и отправляет события во внутренний маршрутизатор и в exchange Rabbit
-func startPublisher(ctx context.Context, confPublisher Publisher, eventCh chan Event, numberMessages int) {
+func startPublisher(ctx context.Context, confPublisher Publisher, eventCh chan interface{}, numberMessages int, wg *sync.WaitGroup) {
 
 	go func() {
-		defer log.Debugf("Отправитель %s прекратил работу", confPublisher.Name)
+		defer log.Debugf("инициализатор отправителя %s прекратил работу", confPublisher.Name)
+		defer wg.Done()
 
 		for _, typeEvent := range confPublisher.TypeMess {
-			startGenEvent(ctx, typeEvent, confPublisher.Name, eventCh, numberMessages)
+			wg.Add(1)
+			startGenEvent(ctx, typeEvent, confPublisher.Name, eventCh, numberMessages, wg)
 		}
 
 	}()
 }
 
 // Генератор сообщения для типа события
-func startGenEvent(ctx context.Context, nameType, namePublisher string, eventCh chan Event, numberMessages int) {
+func startGenEvent(ctx context.Context, nameType, namePublisher string, eventCh chan interface{}, numberMessages int, wg *sync.WaitGroup) {
 
 	go func() {
 		defer log.Debugf("Генератор событий %s.%s прекратил работу", namePublisher, nameType)
+		defer wg.Done()
 		for i := 0; i < numberMessages; i++ {
 			select {
 			case <-ctx.Done():

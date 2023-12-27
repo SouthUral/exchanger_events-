@@ -88,7 +88,7 @@ func initTypeEventRouter(ctx context.Context, eventType string) typeEventRouter 
 	router.eventCh = make(chan Event, 100)
 	router.subscrCh = make(chan SubscriberMess, 100)
 	router.typeEvent = eventType
-	router.subscribers = make(map[string]chan Event)
+	router.subscribers = make(map[string]chan interface{})
 
 	go router.routing(ctx)
 
@@ -102,7 +102,7 @@ func initTypeEventRouter(ctx context.Context, eventType string) typeEventRouter 
 type typeEventRouter struct {
 	routData
 	typeEvent   string
-	subscribers map[string]chan Event
+	subscribers map[string]chan interface{}
 }
 
 // метод распределения событий по подписчикам

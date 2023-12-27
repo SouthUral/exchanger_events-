@@ -1,0 +1,65 @@
+{
+    "publishers": 
+    [
+        {
+            "name": "publisher_1",
+            "type_mess": 
+            [
+                "type_1",
+                "type_2"
+            ]    
+        },
+        {
+            "name": "publisher_2",
+            "type_mess":
+            [
+                "type_2",
+                "type_3"
+            ]
+        },
+        {
+            "name": "publisher_3",
+            "type_mess":
+            [
+                "type_2",
+                "type_1",
+                "type_4"
+            ]
+        }      
+    ],
+    "consumers": 
+    [
+        {
+            "name": "consumer_1",
+            "type_mess": 
+            [
+                "type_1"
+            ]  
+        },
+        {
+            "name": "consumer_2",
+            "type_mess": 
+            [
+                "type_2"
+            ]  
+        },
+        {
+            "name": "consumer_3",
+            "type_mess": 
+            [
+                "type_3"
+            ]  
+        },
+        {
+            "name": "consumer_4",
+            "type_mess": 
+            [
+                "type_4"
+            ]  
+        },
+        {
+            "name": "consumer_5",
+            "all_event": true
+        }
+    ]
+}

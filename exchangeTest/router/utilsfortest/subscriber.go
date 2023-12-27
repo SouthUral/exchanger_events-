@@ -15,7 +15,7 @@ import (
 // func() - функция cancel() контекста для прекращния работы всех получателей
 // chan reportSubTest - канал, по которому прийдут отчеты от горутин получателей
 func SubscribersWork(confSubscribers []Consumer, subscriberChan chan<- interface{}, numberMessages int) (func(), chan ReportSubTest) {
-	reportCh := make(chan ReportSubTest, len(confSubscribers))
+	reportCh := make(chan ReportSubTest, len(confSubscribers)+20)
 	ctx, cancel := context.WithCancel(context.Background())
 	for _, itemConsum := range confSubscribers {
 		subMes := initSubMess(itemConsum)
@@ -148,7 +148,7 @@ func initSubTest(ctx context.Context, subMess subMess, numberMess int, reportCh 
 	res := subTest{
 		nameSub:  subMess.GetNameSub(),
 		eventCh:  subMess.GetReverseCh(),
-		allEvent: subMess.GetConfigSub().GetAllEvent(),
+		allEvent: subMess.GetAllEvent(),
 		reportCh: reportCh,
 	}
 
@@ -156,8 +156,8 @@ func initSubTest(ctx context.Context, subMess subMess, numberMess int, reportCh 
 		return res
 	}
 
-	res.expectedNumberMess = countAllEvents(subMess.Config, numberMess)
-	res.expectedlistCountEvents = initExpectedListCountEvents(subMess.Config)
+	res.expectedNumberMess = countAllEvents(subMess, numberMess)
+	res.expectedlistCountEvents = initExpectedListCountEvents(subMess)
 	res.unexpectedListCountEvents = make(map[keyEvent]int)
 
 	res.worker(ctx)
@@ -166,7 +166,7 @@ func initSubTest(ctx context.Context, subMess subMess, numberMess int, reportCh 
 }
 
 // функция генерирует плоский словарь типа <отправитель_тип: количество полученных сообщений>
-func initExpectedListCountEvents(config confSub) map[keyEvent]int {
+func initExpectedListCountEvents(config subMess) map[keyEvent]int {
 	result := make(map[keyEvent]int, 20)
 	for publisher, types := range config.GetPublihers() {
 		for _, t := range types {
@@ -189,7 +189,7 @@ func initExpectedListCountEvents(config confSub) map[keyEvent]int {
 }
 
 // Функция считает количество всех сообщений которые должен получить подписчик
-func countAllEvents(config confSub, numberMessages int) int {
+func countAllEvents(config subMess, numberMessages int) int {
 	var result int
 
 	if config.GetAllEvent() {

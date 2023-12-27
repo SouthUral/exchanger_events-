@@ -53,72 +53,75 @@ func (e event) GetMess() string {
 
 // реализация интерфейса SubscriberMess
 type subMess struct {
-	Name      string
-	Config    confSub
-	ReverseCh chan interface{}
+	Name       string
+	Types      []string
+	Publishers map[string][]string
+	AllEvent   bool
+	ReverseCh  chan interface{}
 }
 
 func (s subMess) GetNameSub() string {
 	return s.Name
 }
 
-func (s subMess) GetConfigSub() ConfSub {
-	return s.Config
+func (s subMess) GetTypes() []string {
+	return s.Types
 }
 
 func (s subMess) GetReverseCh() chan interface{} {
 	return s.ReverseCh
 }
 
-func initSubMess(subData Consumer) subMess {
-	selfEventCh := make(chan interface{}, 100)
+func (s subMess) GetPublihers() map[string][]string {
+	return s.Publishers
+}
 
-	config := initConSub(subData)
+func (s subMess) GetAllEvent() bool {
+	return s.AllEvent
+}
+
+func initSubMess(subData Consumer) subMess {
+	selfEventCh := make(chan interface{}, 500)
+
+	publishers := make(map[string][]string, 0)
+	for _, item := range subData.Publishers {
+		publishers[item.Name] = item.TypeMess
+	}
 
 	res := subMess{
-		Name:      subData.Name,
-		Config:    config,
-		ReverseCh: selfEventCh,
+		Name:       subData.Name,
+		Publishers: publishers,
+		Types:      subData.Types,
+		AllEvent:   subData.AllEvent,
+		ReverseCh:  selfEventCh,
 	}
 
 	return res
 }
 
 // структура конфигурации подписчика имплементирующая интерфейс ConfSub
-type confSub struct {
-	Types      []string
-	Publishers map[string][]string
-	AllEvent   bool
-}
+// type confSub struct {
+// 	Types      []string
+// 	Publishers map[string][]string
+// 	AllEvent   bool
+// }
 
-func (c confSub) GetTypes() []string {
-	return c.Types
-}
+// func (c confSub) GetPub(namePub string) (bool, []string) {
+// 	pub, ok := c.Publishers[namePub]
+// 	return ok, pub
+// }
 
-func (c confSub) GetPublihers() map[string][]string {
-	return c.Publishers
-}
+// func initConSub(cons Consumer) confSub {
+// 	publishers := make(map[string][]string, 0)
+// 	for _, item := range cons.Publishers {
+// 		publishers[item.Name] = item.TypeMess
+// 	}
 
-func (c confSub) GetPub(namePub string) (bool, []string) {
-	pub, ok := c.Publishers[namePub]
-	return ok, pub
-}
+// 	result := confSub{
+// 		Types:      cons.Types,
+// 		Publishers: publishers,
+// 		AllEvent:   cons.AllEvent,
+// 	}
 
-func (c confSub) GetAllEvent() bool {
-	return c.AllEvent
-}
-
-func initConSub(cons Consumer) confSub {
-	publishers := make(map[string][]string, 0)
-	for _, item := range cons.Publishers {
-		publishers[item.Name] = item.TypeMess
-	}
-
-	result := confSub{
-		Types:      cons.Types,
-		Publishers: publishers,
-		AllEvent:   cons.AllEvent,
-	}
-
-	return result
-}
+// 	return result
+// }

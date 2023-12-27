@@ -25,5 +25,13 @@ type ConfSub interface {
 type SubscriberMess interface {
 	GetNameSub() string
 	GetConfigSub() ConfSub
-	GetReverseCh() chan Event
+	GetReverseCh() chan interface{}
+}
+
+type ExternalSubMess interface {
+	GetNameSub() string
+	GetTypes() []string
+	GetPublihers() map[string][]string
+	GetAllEvent() bool
+	GetReverseCh() chan interface{}
 }

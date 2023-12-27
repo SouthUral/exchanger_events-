@@ -66,12 +66,13 @@ func initSubscribeRouter(ctx context.Context, typeSubscRoutCh, publishSubscRoutC
 		for {
 			select {
 			case sub := <-subCh:
-				subMess, ok := sub.(SubscriberMess)
+				subMess, ok := sub.(ExternalSubMess)
 				if !ok {
 					log.Fatal("невозможно преобразовать сообщение от получателя к типу SubscriberMess")
 				}
-				typeSubscRoutCh <- subMess
-				publishSubscRoutCh <- subMess
+				msg := initSubMess(subMess)
+				typeSubscRoutCh <- msg
+				publishSubscRoutCh <- msg
 			case <-ctx.Done():
 				return
 			}

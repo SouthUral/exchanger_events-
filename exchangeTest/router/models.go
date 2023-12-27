@@ -10,19 +10,34 @@ type routData struct {
 type subMess struct {
 	name      string
 	config    ConfSub
-	reverseCh chan Event
+	reverseCh chan interface{}
 }
 
-func (s *subMess) GetNameSub() string {
+func (s subMess) GetNameSub() string {
 	return s.name
 }
 
-func (s *subMess) GetConfigSub() ConfSub {
+func (s subMess) GetConfigSub() ConfSub {
 	return s.config
 }
 
-func (s *subMess) GetReverseCh() chan Event {
+func (s subMess) GetReverseCh() chan interface{} {
 	return s.reverseCh
+}
+
+func initSubMess(msg ExternalSubMess) subMess {
+	conf := confSub{
+		types:      msg.GetTypes(),
+		publishers: msg.GetPublihers(),
+		allEvent:   msg.GetAllEvent(),
+	}
+
+	res := subMess{
+		name:      msg.GetNameSub(),
+		config:    conf,
+		reverseCh: msg.GetReverseCh(),
+	}
+	return res
 }
 
 // реализация интерфейса ConfSub
@@ -32,19 +47,19 @@ type confSub struct {
 	allEvent   bool
 }
 
-func (c *confSub) GetTypes() []string {
+func (c confSub) GetTypes() []string {
 	return c.types
 }
 
-func (c *confSub) GetPublihers() map[string][]string {
+func (c confSub) GetPublihers() map[string][]string {
 	return c.publishers
 }
 
-func (c *confSub) GetPub(namePub string) (bool, []string) {
+func (c confSub) GetPub(namePub string) (bool, []string) {
 	publisher, ok := c.publishers[namePub]
 	return ok, publisher
 }
 
-func (c *confSub) GetAllEvent() bool {
+func (c confSub) GetAllEvent() bool {
 	return c.allEvent
 }

@@ -2,6 +2,8 @@ package utilsfortest
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -14,16 +16,58 @@ import (
 // Возвращаемые параметры:
 // func() - функция cancel() контекста для прекращния работы всех получателей
 // chan reportSubTest - канал, по которому прийдут отчеты от горутин получателей
-func SubscribersWork(confSubscribers []Consumer, subscriberChan chan<- interface{}, numberMessages int) (func(), chan ReportSubTest) {
-	reportCh := make(chan ReportSubTest, len(confSubscribers)+20)
-	ctx, cancel := context.WithCancel(context.Background())
-	for _, itemConsum := range confSubscribers {
-		subMes := initSubMess(itemConsum)
-		subscriberChan <- subMes
-		initSubTest(ctx, subMes, numberMessages, reportCh)
+func SubscribersWork(confSubscribers []Consumer, subscriberChan chan interface{}, numberMessages int) (chan ReportSubTest, context.Context) {
+	wg := sync.WaitGroup{}
+	linkWg := &wg
+	ctxSubWork, cancelSubWork := context.WithCancel(context.Background())
 
-	}
-	return cancel, reportCh
+	reportCh := make(chan ReportSubTest, len(confSubscribers)+20)
+	go func() {
+		defer cancelSubWork()
+		defer log.Debug("все получатели завершили работу")
+		for _, itemConsum := range confSubscribers {
+			wg.Add(1)
+
+			subMes := initSubMess(itemConsum)
+			log.Debug(itemConsum, "Это сообщение от отправителя!!!")
+			subscriberChan <- subMes
+
+			ctx, cancel := context.WithCancel(context.Background())
+			signalCh := UpdatableTimer(cancel, 10)
+			initSubTest(ctx, subMes, numberMessages, reportCh, signalCh, linkWg)
+		}
+		wg.Wait()
+	}()
+
+	return reportCh, ctxSubWork
+}
+
+// обновляемый таймер
+func UpdatableTimer(cancel func(), timeWait int) chan struct{} {
+	signalCh := make(chan struct{})
+
+	go func() {
+		defer cancel()
+		defer log.Warning("Работа таймера закончена")
+		// defer wg.Done()
+
+		duration := time.Duration(timeWait) * time.Second
+
+		ctx, _ := context.WithTimeout(context.Background(), duration)
+
+		for {
+			select {
+			case <-signalCh:
+				log.Debug("Обновлен таймер")
+				ctx, _ = context.WithTimeout(context.Background(), duration)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return signalCh
+
 }
 
 type keyEvent struct {
@@ -42,12 +86,14 @@ func (k keyEvent) GetTypeName() string {
 type subTest struct {
 	nameSub                   string
 	eventCh                   chan interface{}
+	signalCh                  chan struct{}
 	reportCh                  chan ReportSubTest
 	expectedNumberMess        int
 	counterReceivedMess       int
 	allEvent                  bool
 	expectedlistCountEvents   map[keyEvent]int
 	unexpectedListCountEvents map[keyEvent]int
+	wg                        *sync.WaitGroup
 }
 
 // стуктура для отчета
@@ -84,9 +130,12 @@ func (s *subTest) generatingReport() {
 
 // процесс получения событий, запускаемый если allEvent == true
 func (s *subTest) processWithAllEvent(ctx context.Context) {
+	defer s.wg.Done()
 	for {
 		select {
 		case <-s.eventCh:
+			s.signalCh <- struct{}{}
+			// log.Infof("получатель %s получил событие", s.nameSub)
 			s.counterReceivedMess++
 		case <-ctx.Done():
 			s.generatingReport()
@@ -98,9 +147,12 @@ func (s *subTest) processWithAllEvent(ctx context.Context) {
 
 // процесс получения событий, запускаемый если флаг allEvent == false
 func (s *subTest) processStandart(ctx context.Context) {
+	defer s.wg.Done()
 	for {
 		select {
 		case event := <-s.eventCh:
+			s.signalCh <- struct{}{}
+			// log.Infof("получатель %s получил событие", s.nameSub)
 			eventMsg, ok := event.(Event)
 			s.counterReceivedMess++
 
@@ -109,20 +161,10 @@ func (s *subTest) processStandart(ctx context.Context) {
 				continue
 			}
 
-			// формируется ключ, в котором присутствет и отправитель и тип события
-			keyWithPublisher := keyEvent{
-				publisherName: eventMsg.GetPub(),
-				typeName:      eventMsg.GetTypeEvent(),
-			}
-			s.checkEvent(keyWithPublisher)
-
-			// формируется ключ, в котором есть только тип события
-			keyWithoutPublisher := keyEvent{
-				typeName: eventMsg.GetTypeEvent(),
-			}
-			s.checkEvent(keyWithoutPublisher)
+			s.checkEvent(eventMsg.GetPub(), eventMsg.GetTypeEvent())
 
 		case <-ctx.Done():
+			log.Debugf("Получатель %s готов отправить отчет", s.nameSub)
 			s.generatingReport()
 			return
 		}
@@ -130,26 +172,54 @@ func (s *subTest) processStandart(ctx context.Context) {
 }
 
 // метод проверяет, если ли ключ в списке ожидаемых событий, или в списке неожидаемых событий
-func (s *subTest) checkEvent(key keyEvent) {
-	_, ok := s.expectedlistCountEvents[key]
+func (s *subTest) checkEvent(pub, typeEvent string) {
+	keyPub := keyEvent{
+		publisherName: pub,
+	}
+
+	_, ok := s.expectedlistCountEvents[keyPub]
 	if ok {
-		s.expectedlistCountEvents[key]++
+		s.expectedlistCountEvents[keyPub]++
+		return
+	}
+
+	keyFull := keyEvent{
+		publisherName: pub,
+		typeName:      typeEvent,
+	}
+
+	_, ok = s.expectedlistCountEvents[keyFull]
+	if ok {
+		s.expectedlistCountEvents[keyFull]++
+		return
+	}
+
+	keyType := keyEvent{
+		typeName: typeEvent,
+	}
+
+	_, ok = s.expectedlistCountEvents[keyType]
+	if ok {
+		s.expectedlistCountEvents[keyType]++
+		return
+	}
+
+	_, ok = s.unexpectedListCountEvents[keyFull]
+	if ok {
+		s.unexpectedListCountEvents[keyFull]++
 	} else {
-		_, ok := s.unexpectedListCountEvents[key]
-		if ok {
-			s.unexpectedListCountEvents[key]++
-		} else {
-			s.unexpectedListCountEvents[key] = 1
-		}
+		s.unexpectedListCountEvents[keyFull] = 1
 	}
 }
 
-func initSubTest(ctx context.Context, subMess subMess, numberMess int, reportCh chan ReportSubTest) subTest {
+func initSubTest(ctx context.Context, subMess subMess, numberMess int, reportCh chan ReportSubTest, signalCh chan struct{}, wg *sync.WaitGroup) subTest {
 	res := subTest{
 		nameSub:  subMess.GetNameSub(),
 		eventCh:  subMess.GetReverseCh(),
 		allEvent: subMess.GetAllEvent(),
 		reportCh: reportCh,
+		signalCh: signalCh,
+		wg:       wg,
 	}
 
 	if res.allEvent {
@@ -169,13 +239,21 @@ func initSubTest(ctx context.Context, subMess subMess, numberMess int, reportCh 
 func initExpectedListCountEvents(config subMess) map[keyEvent]int {
 	result := make(map[keyEvent]int, 20)
 	for publisher, types := range config.GetPublihers() {
-		for _, t := range types {
+		if len(types) == 0 {
 			key := keyEvent{
 				publisherName: publisher,
-				typeName:      t,
 			}
 			result[key] = 0
+		} else {
+			for _, t := range types {
+				key := keyEvent{
+					publisherName: publisher,
+					typeName:      t,
+				}
+				result[key] = 0
+			}
 		}
+
 	}
 
 	for _, t := range config.GetTypes() {
@@ -197,8 +275,7 @@ func countAllEvents(config subMess, numberMessages int) int {
 	}
 
 	for _, types := range config.GetPublihers() {
-		counter := len(types) * numberMessages
-		result = +counter
+		result = result + len(types)*numberMessages
 	}
 
 	result = +len(config.GetTypes())

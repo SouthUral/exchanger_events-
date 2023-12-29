@@ -45,28 +45,35 @@ func (t *typeRouter) routing(ctx context.Context) {
 		case event := <-t.eventCh:
 			// отправка события маршрутизатору всех типов событий
 			allEventRouter.eventCh <- event
+			// log.Debug("получено событие")
 
 			// отправка события роутеру этого события
 			typeEvent := event.GetTypeEvent()
 			typeRouter, ok := t.typeRouters[typeEvent]
 			if ok {
 				typeRouter.eventCh <- event
+				// log.Debug("отпраавлено событие")
 			} else {
 				typeRouter := t.addNewTypeRouter(ctx, typeEvent)
 				typeRouter.eventCh <- event
 			}
 		case subMess := <-t.subscrCh:
+			log.Debug("получено сообщение от подписчика!!!")
 			// отправка подписчика маршрутизатору всех типов
 			subConf := subMess.GetConfigSub()
 			subName := subMess.GetNameSub()
 			if subConf.GetAllEvent() {
 				allEventRouter.subscrCh <- subMess
+				log.Debug("подписчик отправлен ко всем типам!!!")
 			} else {
 				typesEvent := subMess.GetConfigSub().GetTypes()
+				// log.Debug(typesEvent)
 				for _, typeEvent := range typesEvent {
+
 					typeRouter, ok := t.typeRouters[typeEvent]
 					if ok {
 						typeRouter.subscrCh <- subMess
+						log.Debug("подписчик отправлен в тип")
 					} else {
 						log.Warningf("для подписчика <%s> создан пустой маршрутизатор типа <%s>", subName, typeEvent)
 						// если маршрутизатора типа нет, то он создается, и ему отправляется информация об подписчике
@@ -114,12 +121,14 @@ func (t *typeEventRouter) routing(ctx context.Context) {
 	for {
 		select {
 		case event := <-t.eventCh:
+			// log.Debugf("получено событие")
 			// TODO: можно добавить отписку подписчика от данного типа событий
 			for subscr, ch := range t.subscribers {
 				ch <- event
 				log.Debugf("Событие типа %s отправлено подписчику %s", event.GetTypeEvent(), subscr)
 			}
 		case subMess := <-t.subscrCh:
+
 			subName := subMess.GetNameSub()
 			_, ok := t.subscribers[subName]
 			if ok {

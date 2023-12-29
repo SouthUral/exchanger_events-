@@ -12,7 +12,7 @@ type publishRouter struct {
 }
 
 // Функция для инициализации маршрутизатора событий по отправителям
-func initPublishRouter(ctx context.Context, сapacityChanals int) publishRouter {
+func initPublishRouter(ctx context.Context, сapacityChanals int) *publishRouter {
 	router := &publishRouter{}
 
 	router.eventCh = make(chan Event, сapacityChanals)
@@ -21,7 +21,7 @@ func initPublishRouter(ctx context.Context, сapacityChanals int) publishRouter 
 
 	go router.routing(ctx)
 
-	return *router
+	return router
 }
 
 // Маршрутизатор событий по отправителю
@@ -71,7 +71,11 @@ func copySubMess(mess SubscriberMess, evenTypes []string) subMess {
 	newConfig := &confSub{}
 
 	newConfig.types = evenTypes
-	newConfig.allEvent = mess.GetConfigSub().GetAllEvent()
+	if len(evenTypes) == 0 {
+		newConfig.allEvent = true
+	} else {
+		newConfig.allEvent = false
+	}
 
 	newMess.config = newConfig
 

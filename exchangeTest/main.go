@@ -2,9 +2,10 @@ package main
 
 import (
 	"os"
-	// "time"
+	"time"
 
-	// router "github.com/SouthUral/exchangeTest/router"
+	router "github.com/SouthUral/exchangeTest/router"
+	ut "github.com/SouthUral/exchangeTest/router/utilsfortest"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -21,18 +22,17 @@ func init() {
 }
 
 func main() {
-	// conf, err := confReader.LoadConf("./config/example.json")
-	// if err != nil {
-	// 	return
-	// }
+	conf, err := ut.LoadConf("./router/testdata/fixt_1.json")
+	if err != nil {
+		return
+	}
+	log.Debug(conf)
 
-	// eventCh, subscrCh, cancelRouter := router.InitRouter()
-	// cancelPub := pub.StartPublishers(conf.Publishers, eventCh)
-	// cancelSub := sub.StartSubscribers(conf.Consumers, subscrCh)
+	eventCh, subscrCh, cancelRouter := router.InitRouter()
+	ut.StartPublishers(conf.Publishers, eventCh, 50)
+	ut.SubscribersWork(conf.Consumers, subscrCh, 50)
 
-	// time.Sleep(5 * time.Minute)
-	// cancelSub()
-	// cancelPub()
-	// cancelRouter()
-	// time.Sleep(30 * time.Second)
+	time.Sleep(5 * time.Minute)
+	cancelRouter()
+	time.Sleep(30 * time.Second)
 }

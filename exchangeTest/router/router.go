@@ -41,6 +41,7 @@ func initEventRouter(ctx context.Context, typeEventRoutCh, publishEventRoutCh ch
 		for {
 			select {
 			case event := <-eventCh:
+				// log.Debug("получено сообытие")
 				eventMsg, ok := event.(Event)
 				if !ok {
 					log.Fatal("невозможно преобразовать событие к типу Event")
@@ -66,7 +67,10 @@ func initSubscribeRouter(ctx context.Context, typeSubscRoutCh, publishSubscRoutC
 		for {
 			select {
 			case sub := <-subCh:
+				log.Debug("Получено сообщение от подписчика")
 				subMess, ok := sub.(ExternalSubMess)
+				types := subMess.GetTypes()
+				log.Debug(types)
 				if !ok {
 					log.Fatal("невозможно преобразовать сообщение от получателя к типу SubscriberMess")
 				}

@@ -125,7 +125,7 @@ func (t *typeEventRouter) routing(ctx context.Context) {
 			// TODO: можно добавить отписку подписчика от данного типа событий
 			for subscr, ch := range t.subscribers {
 				ch <- event
-				log.Debugf("Событие типа %s отправлено подписчику %s", event.GetTypeEvent(), subscr)
+				log.Debugf("маршрутизатор %s отправил событие типа %s подписчику %s", t.typeEvent, event.GetTypeEvent(), subscr)
 			}
 		case subMess := <-t.subscrCh:
 

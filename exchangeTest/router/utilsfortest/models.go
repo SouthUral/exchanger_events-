@@ -13,7 +13,7 @@ type Config struct {
 type Consumer struct {
 	Name       string      `json:"name"`
 	Publishers []Publisher `json:"publishers"`
-	Types      []string    `json:"types"`
+	Types      []string    `json:"type_mess"`
 	AllEvent   bool        `json:"all_event"`
 }
 
@@ -98,30 +98,3 @@ func initSubMess(subData Consumer) subMess {
 
 	return res
 }
-
-// структура конфигурации подписчика имплементирующая интерфейс ConfSub
-// type confSub struct {
-// 	Types      []string
-// 	Publishers map[string][]string
-// 	AllEvent   bool
-// }
-
-// func (c confSub) GetPub(namePub string) (bool, []string) {
-// 	pub, ok := c.Publishers[namePub]
-// 	return ok, pub
-// }
-
-// func initConSub(cons Consumer) confSub {
-// 	publishers := make(map[string][]string, 0)
-// 	for _, item := range cons.Publishers {
-// 		publishers[item.Name] = item.TypeMess
-// 	}
-
-// 	result := confSub{
-// 		Types:      cons.Types,
-// 		Publishers: publishers,
-// 		AllEvent:   cons.AllEvent,
-// 	}
-
-// 	return result
-// }

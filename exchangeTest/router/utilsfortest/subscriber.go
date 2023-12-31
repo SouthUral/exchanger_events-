@@ -135,7 +135,7 @@ func (s *subTest) processWithAllEvent(ctx context.Context) {
 		select {
 		case <-s.eventCh:
 			s.signalCh <- struct{}{}
-			// log.Infof("получатель %s получил событие", s.nameSub)
+			log.Infof("получатель %s получил событие", s.nameSub)
 			s.counterReceivedMess++
 		case <-ctx.Done():
 			s.generatingReport()
@@ -152,7 +152,7 @@ func (s *subTest) processStandart(ctx context.Context) {
 		select {
 		case event := <-s.eventCh:
 			s.signalCh <- struct{}{}
-			// log.Infof("получатель %s получил событие", s.nameSub)
+			log.Infof("получатель %s получил событие", s.nameSub)
 			eventMsg, ok := event.(Event)
 			s.counterReceivedMess++
 

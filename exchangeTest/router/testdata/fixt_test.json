@@ -1,0 +1,31 @@
+{
+    "publishers": 
+    [
+        {
+            "name": "publisher_1",
+            "type_mess": 
+            [
+                "type_1",
+                "type_2"
+            ]    
+        },
+        {
+            "name": "publisher_2",
+            "type_mess":
+            [
+                "type_2",
+                "type_3"
+            ]
+        }    
+    ],
+    "consumers": 
+    [
+        {
+            "name": "consumer_3",
+            "type_mess": 
+            [
+                "type_2"
+            ]  
+        }
+    ]
+}

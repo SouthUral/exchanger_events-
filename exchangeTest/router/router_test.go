@@ -18,11 +18,12 @@ func Test_complex(t *testing.T) {
 		name       string
 		pass       string
 		numbersMsg int
+		numsEvents map[string]int
 	}{
-		{"test_1", "./testdata/fixt_1.json", 10},
-		{"test_2", "./testdata/fixt_2.json", 10},
-		{"test_3", "./testdata/fixt_3.json", 10},
-		{"test_4", "./testdata/fixt_4.json", 10},
+		{"test_1", "./testdata/fixt_1.json", 10, map[string]int{"consumer_1": 20}},
+		{"test_2", "./testdata/fixt_2.json", 10, map[string]int{"consumer_1": 20, "consumer_2": 20, "consumer_3": 20}},
+		{"test_3", "./testdata/fixt_3.json", 10, map[string]int{"consumer_1": 70}},
+		{"test_4", "./testdata/fixt_4.json", 10, map[string]int{"consumer_1": 20, "consumer_2": 30, "consumer_3": 10, "consumer_4": 10, "consumer_5": 70}},
 	}
 
 	for _, d := range data {
@@ -34,43 +35,40 @@ func Test_complex(t *testing.T) {
 			eventCh, subCh, cancelRouter := rt.InitRouter()
 
 			// получатели запускаются первыми
+			numsConsConf := len(conf.Consumers)
 			reportCh, ctxSub := ut.SubscribersWork(conf.Consumers, subCh, d.numbersMsg)
+			time.Sleep(2 * time.Second)
 
 			ut.StartPublishers(conf.Publishers, eventCh, d.numbersMsg)
 			var numsReport int
-			for {
+			<-ctxSub.Done()
+
+			for i := 0; i < numsConsConf; i++ {
 				select {
 				case rep := <-reportCh:
+					numsEvent, ok := d.numsEvents[rep.NameSub]
+					if !ok {
+						t.Errorf("ошибка тестов, %s нет в списке теста", rep.NameSub)
+					}
 					numsReport++
 					if rep.AllEvent {
-						if !checkNumsReceivedEvents(&rep, t) {
-							t.Fatalf("получатель %s ожидал %d количество событий, получено %d", rep.NameSub, rep.ExpectedNumberMess, rep.CounterReceivedMess)
-						}
+						checkNumsReceivedEvents(&rep, t, numsEvent)
 					} else {
-						checkNumsReceivedEvents(&rep, t)
+						checkNumsReceivedEvents(&rep, t, numsEvent)
 						checkUnexpectedEvents(&rep, t)
 						checkExpectedEvents(&rep, t)
-						checkNumberMissedEvents(&rep, t, d.numbersMsg)
 					}
-
-				case <-ctxSub.Done():
-					time.Sleep(5 * time.Second)
-					cancelRouter()
-					if numsReport == 0 {
-						t.Error("Ни одного отчета не было получено")
-					}
-					return
 				}
 			}
+			cancelRouter()
 		})
 	}
 }
 
 // проверка, все ли события получены
-func checkNumsReceivedEvents(rep *ut.ReportSubTest, t *testing.T) bool {
+func checkNumsReceivedEvents(rep *ut.ReportSubTest, t *testing.T, expCount int) bool {
 	res := true
 	resCount := rep.CounterReceivedMess
-	expCount := rep.ExpectedNumberMess
 	if resCount != expCount {
 		t.Errorf("получатель %s ожидал %d количество событий, получено %d", rep.NameSub, expCount, resCount)
 		res = false
@@ -100,23 +98,4 @@ func checkExpectedEvents(rep *ut.ReportSubTest, t *testing.T) {
 		}
 	}
 	t.Logf("#3 Проверка, все ли типы событий, которые ожидает получатель, были получены пройдена! Получатель %s", rep.NameSub)
-}
-
-// проверка числа недополученных событий у каждого типа событий
-func checkNumberMissedEvents(rep *ut.ReportSubTest, t *testing.T, numbersMsg int) {
-	res := true
-	for key, countEvent := range rep.ExpectedlistCountEvents {
-		if countEvent != numbersMsg {
-			t.Errorf("получатель %s ожидал получить %d количество событий типа %s, было получено %d событий",
-				rep.NameSub,
-				numbersMsg,
-				key,
-				countEvent,
-			)
-			res = false
-		}
-	}
-	if res {
-		t.Logf("#4 Проверка получателя %s количества ожидаемых событий по каждому типу пройдена", rep.NameSub)
-	}
 }

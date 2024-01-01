@@ -69,8 +69,8 @@ func initSubscribeRouter(ctx context.Context, typeSubscRoutCh, publishSubscRoutC
 			case sub := <-subCh:
 				log.Debug("Получено сообщение от подписчика")
 				subMess, ok := sub.(ExternalSubMess)
-				types := subMess.GetTypes()
-				log.Debug(types)
+				// types := subMess.GetTypes()
+				// log.Debug(types)
 				if !ok {
 					log.Fatal("невозможно преобразовать сообщение от получателя к типу SubscriberMess")
 				}

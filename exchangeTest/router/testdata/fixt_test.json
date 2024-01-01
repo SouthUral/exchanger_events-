@@ -22,10 +22,7 @@
     [
         {
             "name": "consumer_3",
-            "type_mess": 
-            [
-                "type_2"
-            ]  
+            "all_event": true
         }
     ]
 }

@@ -3,7 +3,6 @@ package utilsfortest
 import (
 	"context"
 	"sync"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -42,34 +41,6 @@ func SubscribersWork(confSubscribers []Consumer, subscriberChan chan interface{}
 	return reportCh, ctxSubWork
 }
 
-// обновляемый таймер
-func UpdatableTimer(cancel func(), timeWait int) chan struct{} {
-	signalCh := make(chan struct{})
-
-	go func() {
-		defer cancel()
-		defer log.Warning("Работа таймера закончена")
-		// defer wg.Done()
-
-		duration := time.Duration(timeWait) * time.Second
-
-		ctx, _ := context.WithTimeout(context.Background(), duration)
-
-		for {
-			select {
-			case <-signalCh:
-				log.Debug("Обновлен таймер")
-				ctx, _ = context.WithTimeout(context.Background(), duration)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	return signalCh
-
-}
-
 type keyEvent struct {
 	publisherName string
 	typeName      string
@@ -88,7 +59,6 @@ type subTest struct {
 	eventCh                   chan interface{}
 	signalCh                  chan struct{}
 	reportCh                  chan ReportSubTest
-	expectedNumberMess        int
 	counterReceivedMess       int
 	allEvent                  bool
 	expectedlistCountEvents   map[keyEvent]int
@@ -99,7 +69,6 @@ type subTest struct {
 // стуктура для отчета
 type ReportSubTest struct {
 	NameSub                   string
-	ExpectedNumberMess        int
 	CounterReceivedMess       int
 	AllEvent                  bool
 	ExpectedlistCountEvents   map[keyEvent]int
@@ -118,7 +87,6 @@ func (s *subTest) worker(ctx context.Context) {
 func (s *subTest) generatingReport() {
 	report := ReportSubTest{
 		NameSub:                   s.nameSub,
-		ExpectedNumberMess:        s.expectedNumberMess,
 		CounterReceivedMess:       s.counterReceivedMess,
 		AllEvent:                  s.allEvent,
 		ExpectedlistCountEvents:   s.expectedlistCountEvents,
@@ -133,9 +101,14 @@ func (s *subTest) processWithAllEvent(ctx context.Context) {
 	defer s.wg.Done()
 	for {
 		select {
-		case <-s.eventCh:
+		case event := <-s.eventCh:
 			s.signalCh <- struct{}{}
-			log.Infof("получатель %s получил событие", s.nameSub)
+			_, ok := event.(Event)
+			if !ok {
+				log.Errorf("получателю %s не удалось привести к типу событие", s.nameSub)
+				continue
+			}
+
 			s.counterReceivedMess++
 		case <-ctx.Done():
 			s.generatingReport()
@@ -152,7 +125,7 @@ func (s *subTest) processStandart(ctx context.Context) {
 		select {
 		case event := <-s.eventCh:
 			s.signalCh <- struct{}{}
-			log.Infof("получатель %s получил событие", s.nameSub)
+
 			eventMsg, ok := event.(Event)
 			s.counterReceivedMess++
 
@@ -222,11 +195,6 @@ func initSubTest(ctx context.Context, subMess subMess, numberMess int, reportCh 
 		wg:       wg,
 	}
 
-	if res.allEvent {
-		return res
-	}
-
-	res.expectedNumberMess = countAllEvents(subMess, numberMess)
 	res.expectedlistCountEvents = initExpectedListCountEvents(subMess)
 	res.unexpectedListCountEvents = make(map[keyEvent]int)
 
@@ -262,23 +230,6 @@ func initExpectedListCountEvents(config subMess) map[keyEvent]int {
 		}
 		result[key] = 0
 	}
-
-	return result
-}
-
-// Функция считает количество всех сообщений которые должен получить подписчик
-func countAllEvents(config subMess, numberMessages int) int {
-	var result int
-
-	if config.GetAllEvent() {
-		return result
-	}
-
-	for _, types := range config.GetPublihers() {
-		result = result + len(types)*numberMessages
-	}
-
-	result = +len(config.GetTypes())
 
 	return result
 }

@@ -2,13 +2,12 @@ package consumermanagement
 
 import (
 	"context"
+	"fmt"
+	"sync"
 
-	api "github.com/SouthUral/exchangeTest/api/api_v1"
-
-	models "github.com/SouthUral/exchangeTest/models"
+	log "github.com/sirupsen/logrus"
 )
 
-// Инициализирует менеджера получателей, который управляет внутренними получателями
 // TODO: нужно передать сюда состояние, которое будет выгружено из БД при запуске
 // либо придет пустая структура (значит что состояния нет в БД), либо придет структура и по ней будут инициализированы внутренние получатели
 
@@ -20,72 +19,119 @@ import (
 
 // Каналы на получение:
 // TODO: Нужен канал от HTTP API, по которому будут поступать команды для получателей
-func InitConsManager(apiCh <-chan models.SubMess, subCh chan<- models.SubscriberMess) func() {
-	storageInfoCons := make(map[string]internalConsum)
 
-	ctx, cancel := context.WithCancel(context.Background())
+// Инициализирует менеджера получателей, который управляет внутренними получателями.
+// Объект реализует логику, и получает команды от API.
+// apiCh: канал, по которому приходят запросы от API;
+// subCh: канал, в который отправляются сообщения в роутер, для подписки;
+// bdCh: канал для связи с БД, для сохранения сообщений из очереди, сохранения состояния, запроса пропущеных сообщений
+func InitConsManager(apiCh <-chan interface{}, subCh chan interface{}, bdCh chan interface{}) func() {
+	// здесь происходит общение с API
 
-	// TODO: здесь должен быть метод инициализации внутренних получателей
+	ctx, cancel := context.WithCancel(context.Background()) // зачем этот контекст?
+
+	internalConsumers := initStorageInternalCons(subCh, bdCh)
 
 	go func() {
 		for {
 			select {
 			case mess := <-apiCh:
-				// прием сообщение от API gRPC
-				switch mess.TypeMess {
-
-				case api.ConnectingConsumer:
-					// тип сообщения (подключение потребителя)
-					confKey := mess.Conf.ConfSubscribe.GenStringVue()
-					cons, ok := internalConsumers[confKey]
-					// если внутренний получатель с такой конфигурацией уже есть то ему добавляется получатель
-					if ok {
-						cons.AddConsumer(subscriber{
-							name:  mess.Conf.Name,
-							subCh: mess.RevCh,
-						})
-					} else {
-						internalSub := InitInternalConsumer(mess.Conf.ConfSubscribe, subCh)
-						internalSub.AddConsumer(subscriber{
-							name:  mess.Conf.Name,
-							subCh: mess.RevCh,
-						})
-					}
-					// TODO: нужно реализовать проверки конфига, есть ли уже работающий внутренний потребитель с таким конфигом
-
-					// TODO: если конфиг найден, нужна проверка, есть ли этого конфига такой подписчик, если нет, то нужно создать подписчика
-					// TODO: если подписчик есть, нужна проверка в каком он состоянии, если подписчик активен, то нужно отправить ошибку, что такой подписчик уже есть.
-					// TODO: если подписчик есть и он не активен, то нужно привязать канал к этому подписчику и перевести подписчика в состояние активен
-
-				case api.StoppingSending:
-					// тип сообщения (остановка отправления событий)
-					// перевод подписчика в состояние ожидания
-
+				// на каждый тип запроса создается своя горутина
+				msgApi, ok := mess.(messApi)
+				if !ok {
+					log.Error("сообщение от модуля API невозможно привести к внутреннему типу модуля consumermanagement")
 				}
-			case <-done:
+				switch msgApi.GetTypeRequest() {
+				case AddConsumer:
+					go internalConsumers.addConsumer(msgApi)
+				}
+			case <-ctx.Done():
 				return
 			}
 		}
 	}()
-	// TODO: должен принимать канал для связи с сервером, по которому будут передаваться данные о новых потребителях или об их остановке
-	// TODO: должен принимать канал для связи с API для управления и мониторинга получателей
-	// TODO: должен принимать канал для отрпавки сообщений регистрации получателей в маршрутизаторе
+
 	return cancel
 }
 
-// Менеджер внутренних получателей
-type ConsManager struct {
-	InternalConsumers map[string]InternalConsumer  // словарь для хранения экземпляров внутренних получателей
-	ApiCh             <-chan models.SubMess        // канал по которому приходят события от gRPC API
-	SubCh             chan<- models.SubscriberMess // канал в который нужно отправить сообщение для регистрации получателя в router
+// // функция добавления подписчика (работает в горутине).
+// // функция сама формирует отрицательный ответ и отправляет его API
+// func addConsumer(apiCh <-chan interface{}, internalConsumers *storageInternalCons) {
+// 	internalConsumers.addConsumer()
+
+// }
+
+// инициализатор storageInternalCons
+func initStorageInternalCons(subCh, bdChan chan interface{}) *storageInternalCons {
+	storage := make(map[string]*InternalConsumer, 20)
+
+	res := &storageInternalCons{
+		SubCh:          subCh,
+		BdCh:           bdChan,
+		storageIntCons: storage,
+		mx:             sync.Mutex{},
+	}
+	return res
 }
 
-// Запуск работы менеджера получателей
-func (M *ConsManager) runWork(ctx context.Context) {
-
+// Хранилище всех внутренних потребителей
+type storageInternalCons struct {
+	SubCh          chan interface{}
+	BdCh           chan interface{}
+	storageIntCons map[string]*InternalConsumer
+	mx             sync.Mutex
 }
 
-// Добавление внутреннего получателя в ConsManager.InternalConsumers
-func (M *ConsManager) addInternalConsumer(conf models.ConfSub) {
+// метод для добавления подписчика
+func (s *storageInternalCons) addConsumer(msg messApi) {
+	key := s.getStorageKey(msg)
+	s.mx.Lock()
+	internalCons, ok := s.storageIntCons[key]
+	s.mx.Unlock()
+	if ok {
+		err := internalCons.AddConsumer(msg)
+		if err != nil {
+			subCh := msg.GetReverseCh()
+			subCh <- msgForSub{
+				err: err,
+			}
+		}
+	} else {
+		s.addNewInternalCons(msg)
+	}
+}
 
+// метод добавления нового внутреннего потребителя
+func (s *storageInternalCons) addNewInternalCons(conf recipConfig) {
+	defer s.mx.Unlock()
+	internalCons := InitInternalConsumer(conf)
+	s.subscribingRecipientToEvents(internalCons)
+	key := s.getStorageKey(conf)
+	s.mx.Lock()
+	s.storageIntCons[key] = internalCons
+}
+
+// метод для подписки внутреннего получателя на события в маршрутизаторе
+func (s *storageInternalCons) subscribingRecipientToEvents(cons *InternalConsumer) {
+	mess := subscriptionMess{
+		nameInternalSub: cons.Id,
+		types:           cons.ConfConsum.Types,
+		publishers:      cons.ConfConsum.Publishers,
+		allEvent:        cons.ConfConsum.AllEvent,
+		reverseCh:       cons.IncomingEventsCh,
+	}
+
+	s.SubCh <- mess
+	log.Debug("сообщение о подписке отправлено в маршрутизатор")
+}
+
+// метод формирует ключ для хранилища из сообщения API.
+// ключ это конфигурация подписки переведенная в строку
+func (s *storageInternalCons) getStorageKey(msg recipConfig) string {
+	res := fmt.Sprintf("types: %s, publishers: %s, allEvent: %t",
+		msg.GetTypes(),
+		msg.GetPublihers(),
+		msg.GetAllEvent(),
+	)
+	return res
 }

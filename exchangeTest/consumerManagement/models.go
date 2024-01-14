@@ -1,11 +1,6 @@
 package consumermanagement
 
-// структура содержит информацию о внутреннем потребителе
-type internalConsum struct {
-	// conf           models.ConfSub
-	internalConsCh chan messIntenalCons
-	consumers      map[string]infoQueueConsumer
-}
+import "time"
 
 // сообщение для подписки в маршрутизатор
 type subscriptionMess struct {
@@ -49,18 +44,6 @@ type messIntenalCons struct {
 	ConsCh   chan string
 }
 
-// Информация о пром.потр. (очереди)
-type infoQueueConsumer struct {
-	isActive  bool
-	queueChan chan string
-}
-
-// структура содержащая информацию о подписчике и канале связи с ним
-type subscriber struct {
-	name string
-	// subCh models.RevSubCh
-}
-
 // сообщение для потребителя
 type msgForSub struct {
 	err error
@@ -68,4 +51,49 @@ type msgForSub struct {
 
 func (m msgForSub) GetError() error {
 	return m.err
+}
+
+// событие
+type event struct {
+	id        string    // id события
+	offset    int       // порядковый номер события, присваивается внутренним потребителем
+	publisher string    // имя отрпавителя
+	typeEvent string    // название типа события
+	timePub   time.Time // время отправления (публикации)
+	msg       string    // сообщение
+}
+
+func (e event) GetOffset() int {
+	return e.offset
+}
+
+func (e event) GetPub() string {
+	return e.publisher
+}
+
+func (e event) GetTypeEvent() string {
+	return e.typeEvent
+}
+
+func (e event) GetTimePub() time.Time {
+	return e.timePub
+}
+
+func (e event) GetMess() string {
+	return e.msg
+}
+
+// структура сообщения для модуля работы с хранением информации
+type msgForStorageModule struct {
+	typeMsg string // тип сообщения (что нужно от модуля)
+
+	reverseCh chan interface{}
+}
+
+func (m msgForStorageModule) GetTypeMsg() string {
+	return m.typeMsg
+}
+
+func (m msgForStorageModule) GetReverseCh() chan interface{} {
+	return m.reverseCh
 }

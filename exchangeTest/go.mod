@@ -19,6 +19,7 @@ require (
 )
 
 require (
+	github.com/gammazero/deque v0.2.1
 	github.com/google/uuid v1.4.0
 	github.com/rabbitmq/amqp091-go v1.9.0
 	golang.org/x/sys v0.14.0 // indirect

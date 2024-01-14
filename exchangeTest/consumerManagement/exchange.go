@@ -13,17 +13,18 @@ import (
 // Отдает события промежуточному потребителю.
 // Отправляет события на сохранения в БД.
 // структура внутреннего подписчика
-type InternalConsumer struct {
-	Id                  string                // внутренний ID по которому будет работать маршрутизатор
-	mx                  sync.Mutex            // мьютекс, нужен для блокировки доступа
-	ConfConsum          configConsum          // конфигурация подписки
-	activeSubscribers   map[string]subscriber // активные подписчики
-	inactiveSubscribers map[string]subscriber // не активыне подписчики
-	IncomingEventsCh    chan interface{}      // канал для получения событий из маршрутизатора
+type InternalExchange struct {
+	Id                  string                    // внутренний ID по которому будет работать маршрутизатор
+	mx                  sync.Mutex                // мьютекс, нужен для блокировки доступа
+	ConfConsum          configConsum              // конфигурация подписки
+	activeSubscribers   map[string]*queueConsumer // активные подписчики
+	inactiveSubscribers map[string]*queueConsumer // не активыне подписчики
+	IncomingEventsCh    chan interface{}          // канал для получения событий из маршрутизатора
+	lastOffset          int
 }
 
 // Инициализация внутреннего подписчика
-func InitInternalConsumer(conf recipConfig) *InternalConsumer {
+func InitInternalExchange(conf recipConfig) *InternalExchange {
 	ctx, _ := context.WithCancel(context.Background())
 
 	config := configConsum{
@@ -32,12 +33,12 @@ func InitInternalConsumer(conf recipConfig) *InternalConsumer {
 		AllEvent:   conf.GetAllEvent(),
 	}
 
-	intCons := InternalConsumer{
+	intCons := InternalExchange{
 		Id:                  uuid.New().String(),
 		ConfConsum:          config,
 		mx:                  sync.Mutex{},
-		activeSubscribers:   make(map[string]subscriber),
-		inactiveSubscribers: make(map[string]subscriber),
+		activeSubscribers:   make(map[string]*queueConsumer),
+		inactiveSubscribers: make(map[string]*queueConsumer),
 		IncomingEventsCh:    make(chan interface{}, 100),
 	}
 
@@ -51,13 +52,14 @@ func InitInternalConsumer(conf recipConfig) *InternalConsumer {
 
 // Метод для получения событий из маршрутизатора.
 // Получает события и отправляет его всем активным подписчикам и отправляет в канал на сохранение в БД
-func (i *InternalConsumer) eventRouter(ctx context.Context) {
+func (i *InternalExchange) eventRouter(ctx context.Context) {
+	defer log.Infof("the event router has stopped working")
 	for {
 		select {
 		case eventMess := <-i.IncomingEventsCh:
-			// заглушка
-			// здесь должно быть присвоение оффсета входящим событиям, этот оффсет обязательно нужно сохранять куда-то
-			// отправка событий всем подписчикам
+			event := i.eventConversion(eventMess)
+			i.sendingEventsQueue(event)
+
 			// отправка события на запись в БД
 			fmt.Println(eventMess)
 		case <-ctx.Done():
@@ -67,8 +69,42 @@ func (i *InternalConsumer) eventRouter(ctx context.Context) {
 
 }
 
+// отправка события всем активным очередям
+func (i *InternalExchange) sendingEventsQueue(event event) {
+	for _, queue := range i.activeSubscribers {
+		select {
+		case queue.inputCh <- event:
+
+		default:
+
+		}
+	}
+}
+
+// преобразование полученного интерфейса от маршрутизатора к внутренней структуре
+func (i *InternalExchange) eventConversion(msg interface{}) event {
+	eventInterface, ok := msg.(eventFromRouter)
+	if !ok {
+		log.Fatal("it is not possible to convert an event to an interface")
+	}
+
+	offset := i.lastOffset + 1
+
+	newEvent := event{
+		offset:    offset,
+		publisher: eventInterface.GetPub(),
+		typeEvent: eventInterface.GetTypeEvent(),
+		timePub:   eventInterface.GetTimePub(),
+		msg:       eventInterface.GetMess(),
+	}
+
+	i.lastOffset = offset
+
+	return newEvent
+}
+
 // TODO: Метод добавления подписчика
-func (i *InternalConsumer) AddConsumer(sub subInfo) error {
+func (i *InternalExchange) AddConsumer(sub subInfo) error {
 	// defer log.Infof("a subscriber: %s has been added to the queue", sub.name)
 
 	i.mx.Lock()
@@ -99,8 +135,16 @@ func (i *InternalConsumer) AddConsumer(sub subInfo) error {
 	return nil
 }
 
+// инициализация очереди
+func (i *InternalExchange) initNewQueueCons(sub subInfo) *queueConsumer {
+	res := initQueueConsumer(sub, i.Id)
+	i.activeSubscribers[sub.GetName()] = res
+
+	return res
+}
+
 // Метод удаления подписчика
-func (i *InternalConsumer) delConsumer(sub subInfo) error {
+func (i *InternalExchange) delConsumer(sub subInfo) error {
 	name := sub.GetName()
 
 	defer i.mx.Unlock()
@@ -124,6 +168,6 @@ func (i *InternalConsumer) delConsumer(sub subInfo) error {
 // Метод перевода подписчика в спящее  состояние.
 // В спящем состоянии промежуточный подписчик не перестает сущесвовать, но все активные процессы заканчиваются,
 // прекращается отправка событий в цикле этому подписчику, т.е. он удаляется из списка отправки.
-func (i *InternalConsumer) sleepConsumer(sub subscriber) {
+func (i *InternalExchange) sleepConsumer(subName string) {
 
 }

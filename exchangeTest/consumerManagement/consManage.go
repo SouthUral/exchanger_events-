@@ -27,6 +27,8 @@ import (
 // bdCh: канал для связи с БД, для сохранения сообщений из очереди, сохранения состояния, запроса пропущеных сообщений
 func InitConsManager(apiCh <-chan interface{}, subCh chan interface{}, bdCh chan interface{}) func() {
 	// здесь происходит общение с API
+	// TODO: при загрузке нужно получить конфигурацию для восстановления состояния
+	// TODO: либо отправить в модуль работы с БД запрос через канал, на восстановление состояния
 
 	ctx, cancel := context.WithCancel(context.Background()) // зачем этот контекст?
 
@@ -63,7 +65,7 @@ func InitConsManager(apiCh <-chan interface{}, subCh chan interface{}, bdCh chan
 
 // инициализатор storageInternalCons
 func initStorageInternalCons(subCh, bdChan chan interface{}) *storageInternalCons {
-	storage := make(map[string]*InternalConsumer, 20)
+	storage := make(map[string]*InternalExchange, 20)
 
 	res := &storageInternalCons{
 		SubCh:          subCh,
@@ -78,7 +80,7 @@ func initStorageInternalCons(subCh, bdChan chan interface{}) *storageInternalCon
 type storageInternalCons struct {
 	SubCh          chan interface{}
 	BdCh           chan interface{}
-	storageIntCons map[string]*InternalConsumer
+	storageIntCons map[string]*InternalExchange
 	mx             sync.Mutex
 }
 
@@ -97,22 +99,24 @@ func (s *storageInternalCons) addConsumer(msg messApi) {
 			}
 		}
 	} else {
-		s.addNewInternalCons(msg)
+		intCons := s.addNewInternalCons(msg)
+		intCons.AddConsumer(msg)
 	}
 }
 
 // метод добавления нового внутреннего потребителя
-func (s *storageInternalCons) addNewInternalCons(conf recipConfig) {
+func (s *storageInternalCons) addNewInternalCons(conf recipConfig) *InternalExchange {
 	defer s.mx.Unlock()
-	internalCons := InitInternalConsumer(conf)
+	internalCons := InitInternalExchange(conf)
 	s.subscribingRecipientToEvents(internalCons)
 	key := s.getStorageKey(conf)
 	s.mx.Lock()
 	s.storageIntCons[key] = internalCons
+	return internalCons
 }
 
 // метод для подписки внутреннего получателя на события в маршрутизаторе
-func (s *storageInternalCons) subscribingRecipientToEvents(cons *InternalConsumer) {
+func (s *storageInternalCons) subscribingRecipientToEvents(cons *InternalExchange) {
 	mess := subscriptionMess{
 		nameInternalSub: cons.Id,
 		types:           cons.ConfConsum.Types,

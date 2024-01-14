@@ -1,5 +1,7 @@
 package consumermanagement
 
 const (
-	AddConsumer = "AddConsumer"
+	AddConsumer    = "AddConsumer"
+	statusActive   = "Active"
+	statusInActive = "Inactive"
 )

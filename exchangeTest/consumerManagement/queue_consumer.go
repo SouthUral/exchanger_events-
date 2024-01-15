@@ -30,6 +30,7 @@ type queueConsumer struct {
 	stateCh        chan interface{} // канал для связи с модулей хранения
 }
 
+// инициализация queueConsumer, вызывается либо при добавлении новой очереди, либо при восстановлении состояния сервиса
 func initQueueConsumer(subInfo subInfo, idExchange string) *queueConsumer {
 
 	res := &queueConsumer{
@@ -48,6 +49,34 @@ func initQueueConsumer(subInfo subInfo, idExchange string) *queueConsumer {
 	go res.Queue(subInfo.GetCtx())
 
 	return res
+}
+
+// метод восстановления очереди из спящего состояния, вызывается извне структуры
+func (q *queueConsumer) wakeUpQueue(subInfo subInfo) {
+	q.outputCh = subInfo.GetReverseCh()
+	newLimitSizeQueue := subInfo.GetMaxSize()
+	if newLimitSizeQueue != q.limitSizeQueue {
+		q.limitSizeQueue = newLimitSizeQueue
+	}
+
+	// запуск очереди без восстановления
+	if !subInfo.GetRestoringQueue() {
+		go q.Queue(subInfo.GetCtx())
+		log.Infof("the queue %s:%s has been started without recovery", q.idExchange, q.name)
+		return
+	}
+
+	// запуск восстановления очереди через переданный offset
+	lastOffset := subInfo.GetOffsetLastEvent()
+	if lastOffset != 0 {
+
+	}
+
+	// запуск восстановления очереди через переданное время
+	lastTime := subInfo.GetTimeLastEvent()
+	if !lastTime.IsZero() {
+
+	}
 }
 
 // внутренняя очередь, состоит из двух горутин
@@ -148,6 +177,7 @@ func (q *queueConsumer) saveState() {
 
 }
 
+// TODO: пока метод не вызывается, т.к. сам объект пока не может понять когда ему нужно вызвать этот метод, скорее всего его нужно вызвать извне
 // отправка сведений о созданном объекте для сохранения
 func (q *queueConsumer) saveObject() {
 	q.mx.RLock()

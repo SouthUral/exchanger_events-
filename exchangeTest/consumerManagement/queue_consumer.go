@@ -18,17 +18,16 @@ import (
 
 // структура очереди потребителя
 type queueConsumer struct {
-	idQueue             string           // уникальный индентификатор, необходим для восстановления состояния программы
-	idExchange          string           // id InternalExchange
-	name                string           // имя, соответствует имени внешнего потребителя
-	limitSizeQueue      int              // предельное количество событий в очереди, по достижению которого в режиме inactive очередь сбросится и перейдет в спящий режим
-	currentStatus       string           // текущее состояние (active/inactive)
-	inputCh             chan event       // канал, по которому приходят события
-	mx                  sync.RWMutex     // мьютекс для конкурентного доступа к атрибутам
-	outputCh            chan interface{} // канал, по которому события отправляются внешнему потребителю
-	lastMsg             event            // последнее отпрвленное (или неотправленное событие, пока непонятно)
-	lastdispatchedEvent string
-	storageModuleCh     chan interface{} // канал для связи с модулей хранения
+	idQueue        string           // уникальный индентификатор, необходим для восстановления состояния программы
+	idExchange     string           // id InternalExchange
+	name           string           // имя, соответствует имени внешнего потребителя
+	limitSizeQueue int              // предельное количество событий в очереди, по достижению которого в режиме inactive очередь сбросится и перейдет в спящий режим
+	currentStatus  string           // текущее состояние (active/inactive)
+	inputCh        chan event       // канал, по которому приходят события
+	mx             sync.RWMutex     // мьютекс для конкурентного доступа к атрибутам
+	outputCh       chan interface{} // канал, по которому события отправляются внешнему потребителю
+	lastMsg        event            // последнее отпрвленное (или неотправленное событие, пока непонятно)
+	stateCh        chan interface{} // канал для связи с модулей хранения
 }
 
 func initQueueConsumer(subInfo subInfo, idExchange string) *queueConsumer {
@@ -38,7 +37,7 @@ func initQueueConsumer(subInfo subInfo, idExchange string) *queueConsumer {
 		idExchange:     idExchange,
 		name:           subInfo.GetName(),
 		currentStatus:  statusActive,
-		inputCh:        make(chan event, 100),
+		inputCh:        make(chan event),
 		outputCh:       subInfo.GetReverseCh(),
 		mx:             sync.RWMutex{},
 		limitSizeQueue: subInfo.GetMaxSize(),
@@ -51,6 +50,7 @@ func initQueueConsumer(subInfo subInfo, idExchange string) *queueConsumer {
 	return res
 }
 
+// внутренняя очередь, состоит из двух горутин
 func (q *queueConsumer) Queue(ctx context.Context) {
 	var que deq.Deque[event]
 	context, cancel := context.WithCancel(context.Background())
@@ -67,10 +67,8 @@ func (q *queueConsumer) Queue(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				// отмена контекста внешнего получателя, переход в ждущий режим
-				q.mx.Lock()
 				// перевод очереди в неактивный режим, т.е. очередь все еще работает, но теперь по достижении лимита очередь уснет
-				q.currentStatus = statusInActive
-				q.mx.Unlock()
+				q.switchingStatus(statusInActive)
 				return
 			default:
 				if que.Len() > 0 {
@@ -80,6 +78,8 @@ func (q *queueConsumer) Queue(ctx context.Context) {
 					q.mx.Lock()
 					q.lastMsg = msg
 					q.mx.Unlock()
+
+					q.saveState()
 				}
 
 			}
@@ -97,10 +97,7 @@ func (q *queueConsumer) Queue(ctx context.Context) {
 			case <-context.Done():
 				return
 			case msg := <-q.inputCh:
-				q.mx.RLock()
-				status := q.currentStatus
-				q.mx.RUnlock()
-
+				status := q.getStatus()
 				switch status {
 				case statusActive:
 					que.PushBack(msg)
@@ -109,7 +106,7 @@ func (q *queueConsumer) Queue(ctx context.Context) {
 						que.PushBack(msg)
 					} else {
 						// прекращение работы очереди, переход в спящий режим
-						q.switchingToSleep()
+						q.switchingStatus(statusSleep)
 						cancel()
 					}
 				}
@@ -120,7 +117,88 @@ func (q *queueConsumer) Queue(ctx context.Context) {
 
 }
 
-// метод: перевод intermediateConsumer в спящий режим.
-// Отключение всех активных горутин, после перевода по inputCh не должны поступать события
-func (q *queueConsumer) switchingToSleep() {
+// конкурентно безопасное переключение статуса
+func (q *queueConsumer) switchingStatus(status string) {
+	q.mx.Lock()
+	q.currentStatus = status
+	q.mx.Unlock()
+}
+
+// конкурентно безопасное получение статуса
+func (q *queueConsumer) getStatus() string {
+	q.mx.RLock()
+	status := q.currentStatus
+	q.mx.RUnlock()
+	return status
+}
+
+// метод сохранения состояния
+func (q *queueConsumer) saveState() {
+	// формировать сообщение для отправки в канал для сохранения
+	q.mx.RLock()
+	msgForState := stateQueueMsg{
+		typeMsg:     saveStateQueue,
+		idQueue:     q.idQueue,
+		offsetEvent: q.lastMsg.GetOffset(),
+	}
+	q.mx.RUnlock()
+	q.stateCh <- msgForState
+
+	defer log.Debugf("an event has been sent to save the state of the queue object %s:%s", msgForState.nameQueue, msgForState.idExchange)
+
+}
+
+// отправка сведений о созданном объекте для сохранения
+func (q *queueConsumer) saveObject() {
+	q.mx.RLock()
+	msgForState := stateQueueMsg{
+		typeMsg:    saveObjectQueue,
+		idQueue:    q.idQueue,
+		idExchange: q.idExchange,
+		nameQueue:  q.name,
+		limitSize:  q.limitSizeQueue,
+	}
+	q.mx.RUnlock()
+	q.stateCh <- msgForState
+
+	defer log.Infof("events have been sent to save the queue object %s:%s", msgForState.nameQueue, msgForState.idExchange)
+}
+
+// сообщение для сохранения состояния
+type stateQueueMsg struct {
+	typeMsg     string           // тип сообщения (сохранение состояния или сохранение объекта)
+	idQueue     string           // id очереди
+	idExchange  string           // id exchange
+	nameQueue   string           // имя очереди
+	limitSize   int              // лимит очереди при переходе в состояние Inactive
+	offsetEvent int              // порядковый номер события exchange, которое было отправлено внешнему потребителю
+	reverseCh   chan interface{} // канал для возвращаения данных
+}
+
+func (s stateQueueMsg) GetTypeMsg() string {
+	return s.typeMsg
+}
+
+func (s stateQueueMsg) GetIdQueue() string {
+	return s.idQueue
+}
+
+func (s stateQueueMsg) GetIdExchange() string {
+	return s.idExchange
+}
+
+func (s stateQueueMsg) GetNameQueue() string {
+	return s.nameQueue
+}
+
+func (s stateQueueMsg) GetLimitSizeQueue() int {
+	return s.limitSize
+}
+
+func (s stateQueueMsg) GetOffsetEvent() int {
+	return s.offsetEvent
+}
+
+func (s stateQueueMsg) GetReverseCh() chan interface{} {
+	return s.reverseCh
 }

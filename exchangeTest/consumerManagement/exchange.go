@@ -14,13 +14,13 @@ import (
 // Отправляет события на сохранения в БД.
 // структура внутреннего подписчика
 type InternalExchange struct {
-	Id                  string                    // внутренний ID по которому будет работать маршрутизатор
-	mx                  sync.Mutex                // мьютекс, нужен для блокировки доступа
-	ConfConsum          configConsum              // конфигурация подписки
-	activeSubscribers   map[string]*queueConsumer // активные подписчики
-	inactiveSubscribers map[string]*queueConsumer // не активыне подписчики
-	IncomingEventsCh    chan interface{}          // канал для получения событий из маршрутизатора
-	lastOffset          int
+	Id               string                    // внутренний ID по которому будет работать маршрутизатор
+	mx               sync.Mutex                // мьютекс, нужен для блокировки доступа
+	ConfConsum       configConsum              // конфигурация подписки
+	activeQueue      map[string]*queueConsumer // активные подписчики
+	inactiveQueue    map[string]*queueConsumer // не активыне подписчики
+	IncomingEventsCh chan interface{}          // канал для получения событий из маршрутизатора
+	lastOffset       int
 }
 
 // Инициализация внутреннего подписчика
@@ -34,12 +34,12 @@ func InitInternalExchange(conf recipConfig) *InternalExchange {
 	}
 
 	intCons := InternalExchange{
-		Id:                  uuid.New().String(),
-		ConfConsum:          config,
-		mx:                  sync.Mutex{},
-		activeSubscribers:   make(map[string]*queueConsumer),
-		inactiveSubscribers: make(map[string]*queueConsumer),
-		IncomingEventsCh:    make(chan interface{}, 100),
+		Id:               uuid.New().String(),
+		ConfConsum:       config,
+		mx:               sync.Mutex{},
+		activeQueue:      make(map[string]*queueConsumer),
+		inactiveQueue:    make(map[string]*queueConsumer),
+		IncomingEventsCh: make(chan interface{}, 100),
 	}
 
 	// запуск маршрутизации событий
@@ -71,12 +71,13 @@ func (i *InternalExchange) eventRouter(ctx context.Context) {
 
 // отправка события всем активным очередям
 func (i *InternalExchange) sendingEventsQueue(event event) {
-	for _, queue := range i.activeSubscribers {
-		select {
-		case queue.inputCh <- event:
-
-		default:
-
+	for name, queue := range i.activeQueue {
+		status := queue.getStatus()
+		switch status {
+		case statusActive, statusInActive:
+			queue.inputCh <- event
+		case statusSleep:
+			i.sleepQueue(name)
 		}
 	}
 }
@@ -108,7 +109,7 @@ func (i *InternalExchange) AddConsumer(sub subInfo) error {
 	// defer log.Infof("a subscriber: %s has been added to the queue", sub.name)
 
 	i.mx.Lock()
-	_, ok := i.activeSubscribers[sub.GetName()]
+	_, ok := i.activeQueue[sub.GetName()]
 
 	// Проверка в активных подписчиках
 
@@ -138,7 +139,7 @@ func (i *InternalExchange) AddConsumer(sub subInfo) error {
 // инициализация очереди
 func (i *InternalExchange) initNewQueueCons(sub subInfo) *queueConsumer {
 	res := initQueueConsumer(sub, i.Id)
-	i.activeSubscribers[sub.GetName()] = res
+	i.activeQueue[sub.GetName()] = res
 
 	return res
 }
@@ -150,13 +151,13 @@ func (i *InternalExchange) delConsumer(sub subInfo) error {
 	defer i.mx.Unlock()
 
 	i.mx.Lock()
-	_, ok := i.inactiveSubscribers[name]
+	_, ok := i.inactiveQueue[name]
 	if ok {
-		delete(i.inactiveSubscribers, name)
+		delete(i.inactiveQueue, name)
 		return nil
 	}
 
-	_, ok = i.activeSubscribers[name]
+	_, ok = i.activeQueue[name]
 	if ok {
 		err := fmt.Errorf("the subscriber %s is active", name)
 		return err
@@ -168,6 +169,9 @@ func (i *InternalExchange) delConsumer(sub subInfo) error {
 // Метод перевода подписчика в спящее  состояние.
 // В спящем состоянии промежуточный подписчик не перестает сущесвовать, но все активные процессы заканчиваются,
 // прекращается отправка событий в цикле этому подписчику, т.е. он удаляется из списка отправки.
-func (i *InternalExchange) sleepConsumer(subName string) {
-
+func (i *InternalExchange) sleepQueue(nameQueue string) {
+	defer log.Infof("the queue: %s has been moved to inactiveQueue", nameQueue)
+	queue := i.activeQueue[nameQueue]
+	i.inactiveQueue[nameQueue] = queue
+	delete(i.activeQueue, nameQueue)
 }

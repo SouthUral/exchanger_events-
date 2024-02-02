@@ -4,9 +4,10 @@ import (
 	"os"
 	"time"
 
-	router "github.com/SouthUral/exchangeTest/router"
-	ut "github.com/SouthUral/exchangeTest/router/utilsfortest"
+	// router "github.com/SouthUral/exchangeTest/router"
+	// ut "github.com/SouthUral/exchangeTest/router/utilsfortest"
 
+	"github.com/SouthUral/exchangeTest/internal/core/router"
 	log "github.com/sirupsen/logrus"
 )
 

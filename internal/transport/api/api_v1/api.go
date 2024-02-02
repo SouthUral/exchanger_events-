@@ -4,11 +4,7 @@ import (
 	"context"
 	"time"
 
-	ut "github.com/SouthUral/exchangeTest/api/utils"
-	pb "github.com/SouthUral/exchangeTest/grpc"
-
-	models "github.com/SouthUral/exchangeTest/models"
-
+	"github.com/SouthUral/exchangeTest/exchangeTest/models"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )

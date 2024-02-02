@@ -51,10 +51,24 @@ func initQueueConsumer(subInfo subInfo, idExchange string) *queueConsumer {
 	return res
 }
 
+// Метод для отправки события в очередь подписчика.
+// Возвращает true если очередь может принимать события.
+// Возвращает false если очередь в спящем режиме, т.е. давно нет внешнего получателя
+func (q *queueConsumer) receivingEvent(event event) bool {
+	if q.getStatus() == statusSleep {
+		return false
+	}
+
+	q.inputCh <- event
+	return true
+}
+
 // метод восстановления очереди из спящего состояния, вызывается извне структуры
-func (q *queueConsumer) wakeUpQueue(subInfo subInfo) {
+func (q *queueConsumer) startQueue(subInfo subInfo) {
 	q.outputCh = subInfo.GetReverseCh()
 	newLimitSizeQueue := subInfo.GetMaxSize()
+
+	// замена атрибута лимита размера очереди
 	if newLimitSizeQueue != q.limitSizeQueue {
 		q.limitSizeQueue = newLimitSizeQueue
 	}
@@ -69,13 +83,13 @@ func (q *queueConsumer) wakeUpQueue(subInfo subInfo) {
 	// запуск восстановления очереди через переданный offset
 	lastOffset := subInfo.GetOffsetLastEvent()
 	if lastOffset != 0 {
-
+		return
 	}
 
 	// запуск восстановления очереди через переданное время
 	lastTime := subInfo.GetTimeLastEvent()
 	if !lastTime.IsZero() {
-
+		return
 	}
 }
 

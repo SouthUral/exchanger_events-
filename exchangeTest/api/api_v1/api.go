@@ -63,6 +63,6 @@ func (s *server) SendingEvent(ctx context.Context, in *pb.Event, opts ...grpc.Ca
 	}
 }
 
-func (s *server) SubscribingEvents(ctx context.Context, in *pb.ConsumerData, opts ...grpc.CallOption) (pb.ExchangeEvents_SubscribingEventsClient, error) {
+// func (s *server) SubscribingEvents(ctx context.Context, in *pb.ConsumerData, opts ...grpc.CallOption) (pb.ExchangeEvents_SubscribingEventsClient, error) {
 
-}
+// }

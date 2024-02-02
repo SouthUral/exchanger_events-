@@ -72,11 +72,8 @@ func (i *InternalExchange) eventRouter(ctx context.Context) {
 // отправка события всем активным очередям
 func (i *InternalExchange) sendingEventsQueue(event event) {
 	for name, queue := range i.activeQueue {
-		status := queue.getStatus()
-		switch status {
-		case statusActive, statusInActive:
-			queue.inputCh <- event
-		case statusSleep:
+		res := queue.receivingEvent(event)
+		if !res {
 			i.sleepQueue(name)
 		}
 	}

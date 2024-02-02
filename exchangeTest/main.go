@@ -22,7 +22,7 @@ func init() {
 }
 
 func main() {
-	conf, err := ut.LoadConf("./router/testdata/fixt_1.json")
+	conf, err := ut.LoadConf("./router/testdata/fixt_test.json")
 	if err != nil {
 		return
 	}
@@ -30,9 +30,10 @@ func main() {
 
 	eventCh, subscrCh, cancelRouter := router.InitRouter()
 	ut.StartPublishers(conf.Publishers, eventCh, 50)
-	ut.SubscribersWork(conf.Consumers, subscrCh, 50)
-
-	time.Sleep(5 * time.Minute)
-	cancelRouter()
-	time.Sleep(30 * time.Second)
+	_, ctx := ut.SubscribersWork(conf.Consumers, subscrCh, 50)
+	select {
+	case <-ctx.Done():
+		time.Sleep(5 * time.Second)
+		cancelRouter()
+	}
 }

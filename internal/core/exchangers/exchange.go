@@ -9,10 +9,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Внутренний потребитель, по факту это внутрення очередь, получает события и присваивает им offset.
-// Отдает события промежуточному потребителю.
-// Отправляет события на сохранения в БД.
-// структура внутреннего подписчика
+// Внутренний обменник, получает события и присваивает им offset.
+// Отдает события очередям, которые подписаны на него.
+// Отправляет offset события и его id на сохранение в БД.
 type InternalExchange struct {
 	Id               string                    // внутренний ID по которому будет работать маршрутизатор
 	mx               sync.Mutex                // мьютекс, нужен для блокировки доступа
@@ -20,44 +19,51 @@ type InternalExchange struct {
 	activeQueue      map[string]*queueConsumer // активные подписчики
 	inactiveQueue    map[string]*queueConsumer // не активыне подписчики
 	IncomingEventsCh chan interface{}          // канал для получения событий из маршрутизатора
+	cancel           func()                    // функция для отмены контекста, внутренний атрибут
 	lastOffset       int
 }
 
-// Инициализация внутреннего подписчика
+// Инициализация exchange
 func InitInternalExchange(conf recipConfig) *InternalExchange {
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 
+	// инициализация структуры конфигурации подписчика
 	config := configConsum{
 		Types:      conf.GetTypes(),
 		Publishers: conf.GetPublihers(),
 		AllEvent:   conf.GetAllEvent(),
 	}
 
-	intCons := InternalExchange{
+	intCons := &InternalExchange{
 		Id:               uuid.New().String(),
 		ConfConsum:       config,
 		mx:               sync.Mutex{},
 		activeQueue:      make(map[string]*queueConsumer),
 		inactiveQueue:    make(map[string]*queueConsumer),
-		IncomingEventsCh: make(chan interface{}, 100),
+		IncomingEventsCh: make(chan interface{}, 5),
+		cancel:           cancel,
 	}
 
 	// запуск маршрутизации событий
 	go intCons.eventRouter(ctx)
 
-	log.Debug("инициализирован внутренний потребитель %s", intCons.Id)
+	log.Debugf("инициализирован внутренний потребитель %s", intCons.Id)
 
-	return &intCons
+	return intCons
 }
 
-// Метод для получения событий из маршрутизатора.
-// Получает события и отправляет его всем активным подписчикам и отправляет в канал на сохранение в БД
+// Метод запускается как горутина.
+// Получает события и отправляет его всем активным очередям и отправляет в канал на сохранение в БД
 func (i *InternalExchange) eventRouter(ctx context.Context) {
-	defer log.Infof("the event router has stopped working")
+	defer log.Infof("eventRouter has stopped working")
 	for {
 		select {
 		case eventMess := <-i.IncomingEventsCh:
-			event := i.eventConversion(eventMess)
+			event, err := i.eventConversion(eventMess)
+			if err != nil {
+				// если будет ошибка конвертации, то нужно прекратить работу программы
+				return
+			}
 			i.sendingEventsQueue(event)
 
 			// отправка события на запись в БД
@@ -80,13 +86,15 @@ func (i *InternalExchange) sendingEventsQueue(event event) {
 }
 
 // преобразование полученного интерфейса от маршрутизатора к внутренней структуре
-func (i *InternalExchange) eventConversion(msg interface{}) event {
+func (i *InternalExchange) eventConversion(msg interface{}) (event, error) {
+	var err error
 	eventInterface, ok := msg.(eventFromRouter)
 	if !ok {
-		log.Fatal("it is not possible to convert an event to an interface")
+		err = eventConversionError{}
+		log.Error(err)
 	}
 
-	offset := i.lastOffset + 1
+	offset := i.getOffsetEvent()
 
 	newEvent := event{
 		offset:    offset,
@@ -96,9 +104,16 @@ func (i *InternalExchange) eventConversion(msg interface{}) event {
 		msg:       eventInterface.GetMess(),
 	}
 
-	i.lastOffset = offset
+	return newEvent, err
+}
 
-	return newEvent
+// метод возвращает offset который можно присвоить новому событию.
+func (i *InternalExchange) getOffsetEvent() int {
+	defer i.mx.Unlock()
+	i.mx.Lock()
+	offset := i.lastOffset + 1
+	i.lastOffset = offset
+	return offset
 }
 
 // TODO: Метод добавления подписчика

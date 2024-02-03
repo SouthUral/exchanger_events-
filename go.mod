@@ -1,4 +1,4 @@
-module github.com/SouthUral/exchangeTest
+module github.com/SouthUral/exchangerEvents
 
 go 1.21.2
 

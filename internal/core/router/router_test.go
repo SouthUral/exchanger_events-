@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	rt "github.com/SouthUral/exchangeTest/router"
-	ut "github.com/SouthUral/exchangeTest/router/utilsfortest"
+	rt "github.com/SouthUral/exchangerEvents/internal/core/router"
+	ut "github.com/SouthUral/exchangerEvents/internal/core/router/utilsfortest"
 )
 
 // Тест с проверкой базовой работоспособности маршрутизатора

@@ -1,4 +1,4 @@
-package consumermanagement
+package exchangers
 
 const (
 	AddConsumer     = "AddConsumer"
